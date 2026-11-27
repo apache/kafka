@@ -104,6 +104,27 @@ public class ConsumerGroupServiceTest {
     }
 
     @Test
+    public void testDescribeConsumerGroupsIsBatched() throws Exception {
+        List<String> groups = IntStream.range(0, 101).mapToObj(i -> "group-" + i).toList();
+        ConsumerGroupCommand.ConsumerGroupService groupService = consumerGroupService(
+            new String[]{"--bootstrap-server", "localhost:9092", "--group", GROUP, "--describe", "--state"});
+
+        when(admin.describeConsumerGroups(any(), any())).thenAnswer(invocation -> {
+            Collection<String> requestedGroups = invocation.getArgument(0);
+            assertTrue(requestedGroups.size() <= ConsumerGroupCommand.DESCRIBE_GROUPS_BATCH_SIZE);
+            Map<String, KafkaFuture<ConsumerGroupDescription>> descriptions = requestedGroups.stream().collect(Collectors.toMap(
+                Function.identity(), group -> KafkaFuture.completedFuture(describeGroup(group))));
+            return new DescribeConsumerGroupsResult(descriptions);
+        });
+
+        Map<String, ConsumerGroupDescription> descriptions = groupService.describeConsumerGroups(groups);
+
+        assertEquals(groups.size(), descriptions.size());
+        assertEquals(Set.copyOf(groups), descriptions.keySet());
+        verify(admin, times(3)).describeConsumerGroups(any(), any());
+    }
+
+    @Test
     @SuppressWarnings("deprecation")
     public void testAdminRequestsForDescribeNegativeOffsets() throws Exception {
         String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--group", GROUP, "--describe", "--offsets"};
@@ -274,6 +295,30 @@ public class ConsumerGroupServiceTest {
         KafkaFutureImpl<ConsumerGroupDescription> future = new KafkaFutureImpl<>();
         future.complete(description);
         return new DescribeConsumerGroupsResult(Map.of(GROUP, future));
+    }
+
+    @SuppressWarnings("deprecation")
+    private ConsumerGroupDescription describeGroup(String groupId) {
+        return new ConsumerGroupDescription(groupId,
+            true,
+            Set.of(new MemberDescription(
+                "member-" + groupId,
+                Optional.empty(),
+                Optional.empty(),
+                "client",
+                "host",
+                new MemberAssignment(Set.of()),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
+            )),
+            RangeAssignor.class.getName(),
+            GroupType.CLASSIC,
+            GroupState.STABLE,
+            new Node(1, "localhost", 9092),
+            Set.of(),
+            Optional.empty(),
+            Optional.empty());
     }
 
     private ListConsumerGroupOffsetsResult listGroupOffsetsResult(String groupId) {
