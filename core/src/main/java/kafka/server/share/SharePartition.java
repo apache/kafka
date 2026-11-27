@@ -39,6 +39,8 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.PartitionMetadataProvider;
@@ -3421,12 +3423,13 @@ public class SharePartition implements AutoCloseable {
         if (!batch.isControlBatch())
             return false;
 
-        Iterator<Record> batchIterator = batch.iterator();
-        if (!batchIterator.hasNext())
-            return false;
+        try (CloseableIterator<Record> batchIterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            if (!batchIterator.hasNext())
+                return false;
 
-        Record firstRecord = batchIterator.next();
-        return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+            Record firstRecord = batchIterator.next();
+            return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+        }
     }
 
     // Visible for testing. Should only be used for testing purposes.

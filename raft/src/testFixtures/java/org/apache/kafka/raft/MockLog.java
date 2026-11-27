@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.raft;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -29,6 +28,8 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
@@ -251,12 +252,15 @@ public class MockLog implements RaftLog {
 
     private List<LogEntry> buildEntries(RecordBatch batch, Function<Record, Long> offsetSupplier) {
         List<LogEntry> entries = new ArrayList<>();
-        for (Record record : batch) {
-            long offset = offsetSupplier.apply(record);
-            long timestamp = record.timestamp();
-            ByteBuffer key = copy(record.key());
-            ByteBuffer value = copy(record.value());
-            entries.add(buildEntry(offset, new SimpleRecord(timestamp, key, value)));
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            while (iterator.hasNext()) {
+                Record record = iterator.next();
+                long offset = offsetSupplier.apply(record);
+                long timestamp = record.timestamp();
+                ByteBuffer key = copy(record.key());
+                ByteBuffer value = copy(record.value());
+                entries.add(buildEntry(offset, new SimpleRecord(timestamp, key, value)));
+            }
         }
         return entries;
     }

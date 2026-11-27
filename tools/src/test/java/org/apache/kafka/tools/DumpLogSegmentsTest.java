@@ -826,13 +826,13 @@ public class DumpLogSegmentsTest {
 
     private Record serializedRecord(ApiMessage key, ApiMessageAndVersion value) {
         byte[] valueBytes = value == null ? null : MessageUtil.toVersionPrefixedBytes(value.version(), value.message());
-        return singletonRecords(
+        return TestUtils.records(singletonRecords(
             valueBytes,
             MessageUtil.toCoordinatorTypePrefixedBytes(key),
             Compression.NONE,
             RecordBatch.NO_TIMESTAMP,
             RecordBatch.CURRENT_MAGIC_VALUE
-        ).records().iterator().next();
+        )).iterator().next();
     }
 
     @Test
@@ -843,8 +843,8 @@ public class DumpLogSegmentsTest {
         assertEquals(
             "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
             assertThrows(RuntimeException.class, () ->
-                parser.parse(singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
-                    RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next())
+                parser.parse(TestUtils.records(singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+                    RecordBatch.CURRENT_MAGIC_VALUE)).iterator().next())
             ).getMessage()
         );
 
@@ -947,13 +947,13 @@ public class DumpLogSegmentsTest {
         // An unknown record type should be handled and reported as such.
         assertParseResult(
             parser.parse(
-                singletonRecords(
+                TestUtils.records(singletonRecords(
                     new byte[0],
                     ByteBuffer.allocate(2).putShort(Short.MAX_VALUE).array(),
                     Compression.NONE,
                     RecordBatch.NO_TIMESTAMP,
                     RecordBatch.CURRENT_MAGIC_VALUE
-                ).records().iterator().next()
+                )).iterator().next()
             ),
             Optional.of("Unknown record type 32767 at offset 0, skipping."),
             Optional.empty()
@@ -982,8 +982,8 @@ public class DumpLogSegmentsTest {
         assertEquals(
             "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
             assertThrows(RuntimeException.class, () ->
-                parser.parse(singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
-                    RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next())
+                parser.parse(TestUtils.records(singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+                    RecordBatch.CURRENT_MAGIC_VALUE)).iterator().next())
             ).getMessage()
         );
 
@@ -1015,13 +1015,13 @@ public class DumpLogSegmentsTest {
         // An unknown record type should be handled and reported as such.
         assertParseResult(
             parser.parse(
-                singletonRecords(
+                TestUtils.records(singletonRecords(
                     new byte[0],
                     ByteBuffer.allocate(2).putShort(Short.MAX_VALUE).array(),
                     Compression.NONE,
                     RecordBatch.NO_TIMESTAMP,
                     RecordBatch.CURRENT_MAGIC_VALUE
-                ).records().iterator().next()
+                )).iterator().next()
             ),
             Optional.of("Unknown record type 32767 at offset 0, skipping."),
             Optional.empty()
@@ -1169,7 +1169,7 @@ public class DumpLogSegmentsTest {
             assertEquals(Optional.of(batch.compressionType().name), Optional.ofNullable(parsedBatch.get("compresscodec")));
 
             Iterator<String> parsedRecordIter = readBatchRecords(lines).iterator();
-            for (Record record : batch) {
+            for (Record record : TestUtils.records(batch)) {
                 assertTrue(parsedRecordIter.hasNext());
                 Map<String, String> parsedRecord = parseMetadataFields(parsedRecordIter.next());
                 assertEquals(Optional.of(record.offset()), optionalLong(parsedRecord.get("offset")));
@@ -1204,8 +1204,8 @@ public class DumpLogSegmentsTest {
         assertEquals(
             "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
             assertThrows(RuntimeException.class, () ->
-                parser.parse(singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
-                    RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next())
+                parser.parse(TestUtils.records(singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+                    RecordBatch.CURRENT_MAGIC_VALUE)).iterator().next())
             ).getMessage()
         );
 
@@ -1280,13 +1280,13 @@ public class DumpLogSegmentsTest {
         // An unknown record type should be handled and reported as such.
         assertParseResult(
             parser.parse(
-                singletonRecords(
+                TestUtils.records(singletonRecords(
                     new byte[0],
                     ByteBuffer.allocate(2).putShort(Short.MAX_VALUE).array(),
                     Compression.NONE,
                     RecordBatch.NO_TIMESTAMP,
                     RecordBatch.CURRENT_MAGIC_VALUE
-                ).records().iterator().next()
+                )).iterator().next()
             ),
             Optional.of("Unknown record type 32767 at offset 0, skipping."),
             Optional.empty()
@@ -1419,8 +1419,8 @@ public class DumpLogSegmentsTest {
     @Test
     public void testMirrorStateMessageParserMissingKey() {
         DumpLogSegments.MirrorStateMessageParser parser = new DumpLogSegments.MirrorStateMessageParser();
-        Record record = singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
-            RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next();
+        Record record = TestUtils.records(singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+            RecordBatch.CURRENT_MAGIC_VALUE)).iterator().next();
         assertEquals(
             "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
             assertThrows(RuntimeException.class, () -> parser.parse(record)).getMessage()
@@ -1431,8 +1431,8 @@ public class DumpLogSegmentsTest {
     @ValueSource(shorts = {2, Short.MAX_VALUE})
     public void testMirrorStateMessageParserUnknownType(short type) {
         DumpLogSegments.MirrorStateMessageParser parser = new DumpLogSegments.MirrorStateMessageParser();
-        Record record = singletonRecords(null, ByteBuffer.allocate(Short.BYTES).putShort(type).array(),
-            Compression.NONE, RecordBatch.NO_TIMESTAMP, RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next();
+        Record record = TestUtils.records(singletonRecords(null, ByteBuffer.allocate(Short.BYTES).putShort(type).array(),
+            Compression.NONE, RecordBatch.NO_TIMESTAMP, RecordBatch.CURRENT_MAGIC_VALUE)).iterator().next();
         assertParseResult(
             parser.parse(record),
             Optional.of("Unknown record type " + type + " at offset 0, skipping."),
@@ -1449,9 +1449,9 @@ public class DumpLogSegmentsTest {
     public void testMirrorStateMessageParserUnsupportedVersion(ApiMessage key) {
         DumpLogSegments.MirrorStateMessageParser parser = new DumpLogSegments.MirrorStateMessageParser();
         for (short version : new short[] {-1, 1}) {
-            Record record = singletonRecords(ByteBuffer.allocate(Short.BYTES).putShort(version).array(),
+            Record record = TestUtils.records(singletonRecords(ByteBuffer.allocate(Short.BYTES).putShort(version).array(),
                 MessageUtil.toCoordinatorTypePrefixedBytes(key), Compression.NONE, RecordBatch.NO_TIMESTAMP,
-                RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next();
+                RecordBatch.CURRENT_MAGIC_VALUE)).iterator().next();
             assertParseResult(
                 parser.parse(record),
                 Optional.of("Error at offset 0, skipping. Found an unknown record version " + version +
@@ -1480,8 +1480,8 @@ public class DumpLogSegmentsTest {
     @MethodSource("malformedMirrorStateRecords")
     public void testMirrorStateMessageParserMalformedRecord(byte[] key, byte[] value) {
         DumpLogSegments.MirrorStateMessageParser parser = new DumpLogSegments.MirrorStateMessageParser();
-        Record record = singletonRecords(value, key, Compression.NONE, RecordBatch.NO_TIMESTAMP,
-            RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next();
+        Record record = TestUtils.records(singletonRecords(value, key, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+            RecordBatch.CURRENT_MAGIC_VALUE)).iterator().next();
         DumpLogSegments.ParseResult<String, String> result = parser.parse(record);
         assertTrue(result.key().orElseThrow().startsWith("Error at offset 0, skipping."));
         assertEquals(Optional.empty(), result.value());
