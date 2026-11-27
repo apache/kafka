@@ -83,7 +83,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
-import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.test.DelayedReceive;
@@ -1247,7 +1246,7 @@ public class FetchRequestManagerTest {
         buildFetcher();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        ByteBufferOutputStream out = new SingleByteBufferOutputStream(buffer);
+        SingleByteBufferOutputStream out = new SingleByteBufferOutputStream(buffer);
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(out,
                 DefaultRecordBatch.CURRENT_MAGIC_VALUE,
