@@ -1517,6 +1517,34 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
+    public void shouldAssignStandbyToPreviousMemberWithRoomWhenAnotherCandidateIsAtQuota() {
+        // 5 active tasks and 5 standbys across 6 members give a total task quota of two.
+        // Retaining standby 4 fills member1_1, and retaining standby 1 fills member2_2.
+        // For standby 0, member1_1 is considered first but member2_1 still has room.
+        final Map<String, MemberMetadataAndStateImpl> members = new LinkedHashMap<>();
+        members.put("member0", createMemberMetadata("process0",
+            Map.of("test-subtopology", Set.of(0)), Map.of(), Map.of()));
+        members.put("member1_1", createMemberMetadata("process1",
+            Map.of("test-subtopology", Set.of(1)), Map.of("test-subtopology", Set.of(0, 4)), Map.of()));
+        members.put("member1_2", createMemberMetadata("process1",
+            Map.of("test-subtopology", Set.of(2)), Map.of(), Map.of()));
+        members.put("member1_3", createMemberMetadata("process1"));
+        members.put("member2_1", createMemberMetadata("process2",
+            Map.of("test-subtopology", Set.of(3)), Map.of("test-subtopology", Set.of(0)), Map.of()));
+        members.put("member2_2", createMemberMetadata("process2",
+            Map.of("test-subtopology", Set.of(4)), Map.of("test-subtopology", Set.of(1)), Map.of()));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
+            new TopologyDescriberImpl(5, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(4), getStandbyTasks(result, "test-subtopology", "member1_1"));
+        assertEquals(Set.of(1), getStandbyTasks(result, "test-subtopology", "member2_2"));
+        assertEquals(Set.of("member2_1"), standbyHolders(result, "test-subtopology", 0));
+    }
+
+    @Test
     public void shouldAssignTasksToMembersReportingTaskOffsetsOnColdStart() {
         // Cold start (KAFKA-20719): all members have fresh member IDs and empty target assignments, but report
         // cumulative offsets for the tasks whose state they hold on local disk.
@@ -1560,6 +1588,44 @@ public class StickyTaskAssignorTest {
             mergeAllActiveTasks(result, "member1_1", "member1_2"));
         assertEquals(mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))),
             mergeAllActiveTasks(result, "member2_1", "member2_2"));
+    }
+
+    @Test
+    public void shouldAssignTaskToMemberWithLocalStateWhenAnotherMemberOfSameProcessIsAtQuota() {
+        final Map<String, Map<Integer, Long>> taskOffsets = Map.of("test-subtopology", Map.of(2, 100L));
+        // Equal offsets preserve insertion order, so the member already at quota is considered first.
+        final Map<String, MemberMetadataAndStateImpl> members = new LinkedHashMap<>();
+
+        // Both members of process1 report local state for task 2.
+        members.put("member1_1", new MemberMetadataAndStateImpl(
+            Optional.empty(),
+            Optional.empty(),
+            "process1",
+            Map.of(),
+            Map.of("test-subtopology", Set.of(0)),
+            Map.of(),
+            Map.of(),
+            taskOffsets,
+            Map.of()));
+        members.put("member1_2", createMemberMetadataWithOffsets("process1", taskOffsets));
+
+        // Members of process2 have no local state for task 2.
+        members.put("member2_1", createMemberMetadata("process2", Map.of("test-subtopology", Set.of(1)), Map.of(), Map.of()));
+        members.put("member2_2", createMemberMetadata("process2"));
+        members.put("member2_3", createMemberMetadata("process2"));
+
+        // Three tasks and five members give a quota of one. After retaining tasks 0 and 1, process2 has
+        // lower load (1/3) than process1 (1/2), so falling back to load balancing would always lose local state.
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member1_2"));
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member1_1"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member2_1"));
+        assertEquals(Set.of(), getActiveTasks(result, "test-subtopology", "member2_2"));
+        assertEquals(Set.of(), getActiveTasks(result, "test-subtopology", "member2_3"));
     }
 
     @Test
