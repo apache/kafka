@@ -400,7 +400,7 @@ public class StreamsGroupCommandTest {
 
         DescribeTopicsResult describeTopicsResult = mock(DescribeTopicsResult.class);
         when(adminClient.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class)))
-            .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
+            .thenReturn(describeStreamsResult(groupId, GroupState.DEAD, topics));
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()))
@@ -412,12 +412,6 @@ public class StreamsGroupCommandTest {
             .thenReturn(listOffsetsResult());
         ListGroupsResult listGroupsResult = listGroupResult(groupId);
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
-        ListStreamsGroupOffsetsResult result = mock(ListStreamsGroupOffsetsResult.class);
-        Map<TopicPartition, OffsetAndMetadata> committedOffsetsMap = new HashMap<>();
-        committedOffsetsMap.put(new TopicPartition(topic, 0), mock(OffsetAndMetadata.class));
-        when(adminClient.listStreamsGroupOffsets(anyMap(), any(ListStreamsGroupOffsetsOptions.class))).thenReturn(result);
-        when(result.partitionsToOffsetAndMetadata(anyString())).thenReturn(KafkaFuture.completedFuture(committedOffsetsMap));
-
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args.toArray(new String[0]), adminClient);
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetResult = service.resetOffsets();
 
@@ -428,7 +422,7 @@ public class StreamsGroupCommandTest {
         verify(adminClient, times(1)).describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class));
         verify(adminClient, times(1)).describeTopics(eq(topics), any(DescribeTopicsOptions.class));
         verify(adminClient, times(1)).listOffsets(anyMap(), any(ListOffsetsOptions.class));
-        verify(adminClient, times(1)).listStreamsGroupOffsets(anyMap(), any(ListStreamsGroupOffsetsOptions.class));
+        verify(adminClient, times(0)).listStreamsGroupOffsets(anyMap(), any(ListStreamsGroupOffsetsOptions.class));
 
         service.close();
     }
@@ -546,7 +540,7 @@ public class StreamsGroupCommandTest {
         List<String> args = new ArrayList<>(List.of("--bootstrap-server", "localhost:9092", "--group", groupId, "--reset-offsets", "--input-topic", "topic:3", "--to-latest"));
         
         when(adminClient.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class)))
-            .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
+            .thenReturn(describeStreamsResult(groupId, GroupState.DEAD, List.of(topic)));
         DescribeTopicsResult describeTopicsResult = mock(DescribeTopicsResult.class);
 
         Map<String, TopicDescription> descriptions = Map.of(
@@ -779,7 +773,7 @@ public class StreamsGroupCommandTest {
             .collect(Collectors.toSet()));
     }
 
-    private DescribeStreamsGroupsResult describeStreamsResult(String groupId, GroupState groupState) {
+    private DescribeStreamsGroupsResult describeStreamsResult(String groupId, GroupState groupState, List<String> sourceTopics) {
         StreamsGroupMemberDescription memberDescription = new StreamsGroupMemberDescription("foo", 0, Optional.empty(),
             Optional.empty(), "bar", "baz", 0, "qux",
             Optional.empty(), Map.of(), List.of(), List.of(),
@@ -789,7 +783,7 @@ public class StreamsGroupCommandTest {
             0,
             0,
             0,
-            List.of(new StreamsGroupSubtopologyDescription("subtopologyId", List.of(), List.of(), Map.of(), Map.of())),
+            List.of(new StreamsGroupSubtopologyDescription("subtopologyId", sourceTopics, List.of(), Map.of(), Map.of())),
             List.of(memberDescription),
             groupState,
             new Node(1, "localhost", 9092),
