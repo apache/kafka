@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -36,9 +37,12 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
@@ -59,6 +63,7 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+    private boolean offsetValidationEnabled;
 
     public MirrorSourceTask() {}
 
@@ -66,12 +71,22 @@ public class MirrorSourceTask extends SourceTask {
     MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceLegacyMetrics metrics, String sourceClusterAlias,
                      ReplicationPolicy replicationPolicy,
                      OffsetSyncWriter offsetSyncWriter) {
+        this(consumer, metrics, sourceClusterAlias, replicationPolicy, offsetSyncWriter,
+                MirrorSourceConfig.OFFSET_VALIDATION_ENABLED_DEFAULT);
+    }
+
+    // for testing
+    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceLegacyMetrics metrics, String sourceClusterAlias,
+                     ReplicationPolicy replicationPolicy,
+                     OffsetSyncWriter offsetSyncWriter,
+                     boolean offsetValidationEnabled) {
         this.consumer = consumer;
         this.legacyMetrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
         this.replicationPolicy = replicationPolicy;
         consumerAccess = new Semaphore(1);
         this.offsetSyncWriter = offsetSyncWriter;
+        this.offsetValidationEnabled = offsetValidationEnabled;
     }
 
     @Override
@@ -84,6 +99,7 @@ public class MirrorSourceTask extends SourceTask {
         metrics = metricNamesFormats.contains(METRIC_NAMES_NEW) ? config.metrics(context.pluginMetrics()) : null;
         pollTimeout = config.consumerPollTimeout();
         replicationPolicy = config.replicationPolicy();
+        offsetValidationEnabled = config.offsetValidationEnabled();
         if (config.emitOffsetSyncsEnabled()) {
             offsetSyncWriter = new OffsetSyncWriter(config);
         }
@@ -164,6 +180,14 @@ public class MirrorSourceTask extends SourceTask {
             }
         } catch (WakeupException e) {
             return null;
+        } catch (OffsetOutOfRangeException e) {
+            // With auto.offset.reset=none the consumer surfaces invalid offsets instead of silently
+            // rewinding. Classify the cause and fail the task so the operator sees it.
+            if (!offsetValidationEnabled) {
+                log.warn("Failure during poll.", e);
+                return null;
+            }
+            throw classifyOffsetOutOfRange(e);
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
             return null;
@@ -176,6 +200,91 @@ public class MirrorSourceTask extends SourceTask {
         }
     }
  
+    /**
+     * Works out why the replication consumer was left holding an out-of-range offset and builds the
+     * corresponding fail-fast exception.
+     *
+     * <p>For each affected partition the log start offset on the source cluster is the deciding
+     * signal:
+     * <ul>
+     *   <li>{@code logStartOffset > 0} -- records ahead of our position were removed by the
+     *       retention policy before they could be replicated, so data has been lost.</li>
+     *   <li>{@code logStartOffset == 0} -- the log begins at the very start again, meaning the topic
+     *       was deleted and recreated (or otherwise truncated to empty) and our tracked offset now
+     *       points past the end of the log.</li>
+     * </ul>
+     *
+     * <p>Data loss takes precedence when both conditions are present in a single batch, because it
+     * is the condition with unrecoverable consequences for the target cluster.
+     *
+     * @param cause the exception raised by the consumer
+     * @return a {@link DataLossException} or a {@link TopicResetException}, never {@code null}
+     */
+    // visible for testing
+    KafkaException classifyOffsetOutOfRange(OffsetOutOfRangeException cause) {
+        // Sort for deterministic logging and error messages.
+        Map<TopicPartition, Long> requestedOffsets = new TreeMap<>(
+                Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition));
+        requestedOffsets.putAll(cause.offsetOutOfRangePartitions());
+
+        Map<TopicPartition, Long> logStartOffsets = beginningOffsets(requestedOffsets.keySet());
+
+        Map<TopicPartition, Long> dataLoss = new LinkedHashMap<>();
+        Map<TopicPartition, Long> topicReset = new LinkedHashMap<>();
+
+        requestedOffsets.forEach((topicPartition, requestedOffset) -> {
+            Long logStartOffset = logStartOffsets.get(topicPartition);
+            if (logStartOffset != null && logStartOffset > 0L) {
+                log.error("Detected data loss on {}-{}: MirrorMaker 2 requested offset {} but the "
+                                + "earliest available offset on the source cluster is {}. {} record(s) were "
+                                + "removed by the retention policy before they could be replicated.",
+                        topicPartition.topic(), topicPartition.partition(), requestedOffset,
+                        logStartOffset, logStartOffset - requestedOffset);
+                dataLoss.put(topicPartition, requestedOffset);
+            } else {
+                log.error("Detected a topic reset on {}-{}: MirrorMaker 2 requested offset {} but the "
+                                + "log now starts at offset 0. The source topic was most likely deleted "
+                                + "and recreated.",
+                        topicPartition.topic(), topicPartition.partition(), requestedOffset);
+                topicReset.put(topicPartition, requestedOffset);
+            }
+        });
+
+        if (!dataLoss.isEmpty()) {
+            return new DataLossException("MirrorMaker 2 cannot replicate " + describe(dataLoss)
+                    + " from cluster '" + sourceClusterAlias + "': the requested offsets are no longer "
+                    + "available because the source records were removed by the retention policy. "
+                    + "Failing the task to avoid silently skipping the missing records. Reset the "
+                    + "connector offsets to resume replication and accept the gap.", cause);
+        }
+
+        return new TopicResetException("MirrorMaker 2 cannot replicate " + describe(topicReset)
+                + " from cluster '" + sourceClusterAlias + "': the source topic appears to have been "
+                + "deleted and recreated, so the tracked offsets are no longer valid. Failing the task "
+                + "to avoid replicating the new topic on top of the previously mirrored data. Reset the "
+                + "connector offsets to resume replication.", cause);
+    }
+
+    /**
+     * Looks up the log start offset for each partition. Any failure here is non-fatal: we fall back
+     * to an empty result, which classifies the failure as a topic reset and still fails the task.
+     */
+    private Map<TopicPartition, Long> beginningOffsets(Set<TopicPartition> topicPartitions) {
+        try {
+            return consumer.beginningOffsets(topicPartitions);
+        } catch (KafkaException e) {
+            log.warn("Unable to look up the earliest offsets for {} while classifying an "
+                    + "out-of-range offset.", topicPartitions, e);
+            return Map.of();
+        }
+    }
+
+    private static String describe(Map<TopicPartition, Long> offsets) {
+        return offsets.entrySet().stream()
+                .map(e -> e.getKey().topic() + "-" + e.getKey().partition() + " at offset " + e.getValue())
+                .collect(Collectors.joining(", "));
+    }
+
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
@@ -227,6 +336,11 @@ public class MirrorSourceTask extends SourceTask {
         log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.values().stream()
                 .filter(this::isUncommitted).count());
 
+        Set<TopicPartition> uncommittedPartitions = topicPartitionOffsets.entrySet().stream()
+                .filter(entry -> isUncommitted(entry.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+
         topicPartitionOffsets.forEach((topicPartition, offset) -> {
             // Do not call seek on partitions that don't have an existing offset committed.
             if (isUncommitted(offset)) {
@@ -237,6 +351,15 @@ public class MirrorSourceTask extends SourceTask {
             log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
             consumer.seek(topicPartition, nextOffsetToCommittedOffset);
         });
+
+        // Offset validation requires auto.offset.reset=none, which means the consumer has no
+        // fallback position for partitions we have never replicated before. Seek those explicitly to
+        // the beginning so that a first start behaves exactly as it does with the default settings.
+        if (offsetValidationEnabled && !uncommittedPartitions.isEmpty()) {
+            log.info("Seeking to the beginning of {} partition(s) with no previously committed offset: {}.",
+                    uncommittedPartitions.size(), uncommittedPartitions);
+            consumer.seekToBeginning(uncommittedPartitions);
+        }
     }
 
     // visible for testing 
