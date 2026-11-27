@@ -31,6 +31,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -51,11 +52,13 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
 import static org.apache.kafka.connect.util.ConnectUtils.transformValues;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -1205,6 +1208,59 @@ public class IncrementalCooperativeAssignorTest {
                 IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2
         );
         verify(coordinator).leaderState(notNull());
+    }
+
+    @Test
+    public void testLeaderStateTracksConnectorsWithRevokedTasks() {
+        String leader = "leader";
+        String follower = "follower";
+        Map<String, ExtendedWorkerState> workerStates = new HashMap<>();
+        workerStates.put(leader, new ExtendedWorkerState("leader:618", CONFIG_OFFSET, ExtendedAssignment.empty()));
+        workerStates.put(follower, new ExtendedWorkerState("follower:618", CONFIG_OFFSET, ExtendedAssignment.empty()));
+        WorkerCoordinator coordinator = mock(WorkerCoordinator.class);
+        ArgumentCaptor<WorkerCoordinator.LeaderState> leaderState = ArgumentCaptor.forClass(WorkerCoordinator.LeaderState.class);
+
+        // First rebalance: both connectors are assigned across the two workers
+        performRebalanceWithCoordinator(coordinator, leader, workerStates);
+        verify(coordinator).leaderState(leaderState.capture());
+        assertFalse(leaderState.getValue().hasRevokedTasks("connector2"));
+
+        // Second rebalance: connector2 is no longer in the config (as happens to the task configs of a stopped connector),
+        // so its tasks are revoked. The workers stop them only after they have received this assignment
+        removeConnector("connector2");
+        performRebalanceWithCoordinator(coordinator, leader, workerStates);
+        verify(coordinator, times(2)).leaderState(leaderState.capture());
+        assertTrue(leaderState.getValue().hasRevokedTasks("connector2"));
+
+        // Third rebalance: the workers have stopped the revoked tasks and rejoined
+        performRebalanceWithCoordinator(coordinator, leader, workerStates);
+        verify(coordinator, times(3)).leaderState(leaderState.capture());
+        assertFalse(leaderState.getValue().hasRevokedTasks("connector2"));
+    }
+
+    private void performRebalanceWithCoordinator(WorkerCoordinator coordinator, String leader,
+                                                 Map<String, ExtendedWorkerState> workerStates) {
+        generationId++;
+        when(coordinator.configSnapshot()).thenReturn(configState());
+        when(coordinator.lastCompletedGenerationId()).thenReturn(generationId - 1);
+        when(coordinator.generationId()).thenReturn(generationId);
+        Map<String, ByteBuffer> serializedAssignments = assignor.performTaskAssignment(leader, CONFIG_OFFSET, workerStates,
+                coordinator, IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2);
+        // Apply the newly assigned and revoked connectors and tasks the way a worker does when it rejoins
+        serializedAssignments.forEach((worker, serialized) -> {
+            ExtendedAssignment update = IncrementalCooperativeConnectProtocol.deserializeAssignment(serialized);
+            ExtendedWorkerState state = workerStates.get(worker);
+            Set<String> connectors = new HashSet<>(state.assignment().connectors());
+            connectors.addAll(update.connectors());
+            connectors.removeAll(update.revokedConnectors());
+            Set<ConnectorTaskId> tasks = new HashSet<>(state.assignment().tasks());
+            tasks.addAll(update.tasks());
+            tasks.removeAll(update.revokedTasks());
+            ExtendedAssignment assignment = new ExtendedAssignment(
+                    IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2, ConnectProtocol.Assignment.NO_ERROR,
+                    leader, "leader:618", CONFIG_OFFSET, connectors, tasks, List.of(), List.of(), 0);
+            workerStates.put(worker, new ExtendedWorkerState(state.url(), CONFIG_OFFSET, assignment));
+        });
     }
 
     @Test

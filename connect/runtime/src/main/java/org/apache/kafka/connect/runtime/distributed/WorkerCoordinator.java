@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -312,6 +313,19 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     /**
+     * Whether tasks of the connector were revoked from a worker in the most recent rebalance and that
+     * worker has not rejoined the group yet. With incremental cooperative rebalancing a worker stops its
+     * revoked tasks only after it has received the assignment, so until it rejoins those tasks may still
+     * be running and may still commit offsets.
+     * @return true if this worker is the leader and tasks of the connector are still being revoked;
+     * false if there are none or if this worker is not the leader
+     */
+    public boolean hasPendingTaskRevocation(String connector) {
+        LeaderState state = leaderState();
+        return isLeader() && state != null && state.hasRevokedTasks(connector);
+    }
+
+    /**
      * Get an up-to-date snapshot of the cluster configuration.
      *
      * @return the state of the cluster configuration; the result is not locally cached
@@ -410,13 +424,32 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         private final Map<String, ExtendedWorkerState> allMembers;
         private final Map<String, String> connectorOwners;
         private final Map<ConnectorTaskId, String> taskOwners;
+        private final Set<String> connectorsWithRevokedTasks;
 
         public LeaderState(Map<String, ExtendedWorkerState> allMembers,
                            Map<String, Collection<String>> connectorAssignment,
                            Map<String, Collection<ConnectorTaskId>> taskAssignment) {
+            this(allMembers, connectorAssignment, taskAssignment, Map.of());
+        }
+
+        public LeaderState(Map<String, ExtendedWorkerState> allMembers,
+                           Map<String, Collection<String>> connectorAssignment,
+                           Map<String, Collection<ConnectorTaskId>> taskAssignment,
+                           Map<String, Collection<ConnectorTaskId>> revokedTasks) {
             this.allMembers = allMembers;
             this.connectorOwners = invertAssignment(connectorAssignment);
             this.taskOwners = invertAssignment(taskAssignment);
+            this.connectorsWithRevokedTasks = new HashSet<>();
+            for (Collection<ConnectorTaskId> tasks : revokedTasks.values()) {
+                for (ConnectorTaskId task : tasks) {
+                    connectorsWithRevokedTasks.add(task.connector());
+                }
+            }
+        }
+
+        // Visible for testing
+        boolean hasRevokedTasks(String connector) {
+            return connectorsWithRevokedTasks.contains(connector);
         }
 
         private String ownerUrl(ConnectorTaskId id) {

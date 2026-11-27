@@ -211,6 +211,10 @@ public class WorkerGroupMember {
         return coordinator.ownerUrl(task);
     }
 
+    public boolean hasPendingTaskRevocation(String connector) {
+        return coordinator.hasPendingTaskRevocation(connector);
+    }
+
     /**
      * Get the version of the connect protocol that is currently active in the group of workers.
      *
