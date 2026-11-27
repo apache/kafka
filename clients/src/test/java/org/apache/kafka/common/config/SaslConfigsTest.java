@@ -40,6 +40,15 @@ public class SaslConfigsTest {
     }
 
     @Test
+    public void testSaslLoginTimeoutDefaults() {
+        Map<String, Object> vals = new ConfigDef().withClientSaslSupport().parse(Collections.emptyMap());
+        assertEquals(SaslConfigs.DEFAULT_SASL_LOGIN_CONNECT_TIMEOUT_MS, vals.get(SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS));
+        assertEquals(SaslConfigs.DEFAULT_SASL_LOGIN_READ_TIMEOUT_MS, vals.get(SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS));
+        assertEquals(10000, vals.get(SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS));
+        assertEquals(10000, vals.get(SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS));
+    }
+
+    @Test
     public void testSaslLoginRefreshMinValuesAreValid() {
         Map<Object, Object> props = new HashMap<>();
         props.put(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR, "0.5");
