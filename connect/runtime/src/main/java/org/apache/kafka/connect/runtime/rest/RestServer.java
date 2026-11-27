@@ -290,6 +290,9 @@ public abstract class RestServer {
         String headerConfig = config.responseHeaders();
         if (!Utils.isBlank(headerConfig)) {
             configureHttpResponseHeaderFilter(context, headerConfig);
+            if (adminContext != null) {
+                configureHttpResponseHeaderFilter(adminContext, headerConfig);
+            }
         }
 
         handlers.setHandlers(contextHandlers.toArray(new Handler[0]));
