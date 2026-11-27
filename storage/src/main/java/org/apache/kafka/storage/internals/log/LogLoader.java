@@ -470,7 +470,7 @@ public class LogLoader {
                 int truncatedBytes;
                 try {
                     truncatedBytes = recoverSegment(segment);
-                } catch (InvalidOffsetException | IOException ioe) {
+                } catch (InvalidOffsetException ioe) {
                     long startOffset = segment.baseOffset();
                     logger.warn("Found invalid offset during recovery. Deleting the corrupt segment and creating an empty one with starting offset {}", startOffset);
                     truncatedBytes = segment.truncateTo(startOffset);
