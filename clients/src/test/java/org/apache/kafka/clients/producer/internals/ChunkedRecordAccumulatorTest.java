@@ -39,6 +39,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
@@ -118,6 +119,39 @@ public class ChunkedRecordAccumulatorTest {
         assertNotNull(batch);
         assertEquals(1, batch.recordCount);
         accum.close();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1, false", "32, true"})
+    public void testFirstRecordReadinessBeforeLingerExpires(int valueSizeKiB, boolean expectedReady) throws Exception {
+        int batchSize = 16 * 1024;
+        byte[] value = new byte[valueSizeKiB * 1024];
+
+        BufferPool pool = new BufferPool(8L * batchSize, ChunkedRecordAccumulator.CHUNK_SIZE, metrics, time,
+                "producer-metrics", BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(
+            logContext,
+            batchSize,
+            Compression.NONE,
+            1000,
+            0L,
+            0L,
+            3200,
+            metrics,
+            "producer-metrics",
+            time,
+            null,
+            pool);
+        try {
+            long now = time.milliseconds();
+            accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                maxBlockTimeMs, now, cluster);
+
+            assertEquals(expectedReady ? Set.of(node1) : Set.of(), accum.ready(metadataCache, now).readyNodes);
+        } finally {
+            accum.abortIncompleteBatches();
+            accum.close();
+        }
     }
 
     @Test

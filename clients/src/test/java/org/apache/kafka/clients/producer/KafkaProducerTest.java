@@ -1172,6 +1172,53 @@ public class KafkaProducerTest {
         }
     }
 
+    private KafkaProducer<String, String> producerWithBatchingDisabled(ProducerMetadata metadata, MockClient client, MockTime time) {
+        Map<String, Object> configs = Map.of(
+            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000",
+            ProducerConfig.BATCH_SIZE_CONFIG, 0,
+            ProducerConfig.LINGER_MS_CONFIG, 1000,
+            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+        return kafkaProducer(configs, new StringSerializer(), new StringSerializer(), metadata, client, null, time);
+    }
+
+    @Test
+    public void testZeroBatchSizeSendsFirstRecordWithoutWaitingForLinger() throws Exception {
+        MockTime time = new MockTime();
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1)));
+        KafkaProducer<String, String> producer = producerWithBatchingDisabled(metadata, client, time);
+        try {
+            producer.send(new ProducerRecord<>(topic, 0, null, ""));
+
+            client.waitForRequests(1, TestUtils.DEFAULT_MAX_WAIT_MS);
+            assertEquals(ApiKeys.PRODUCE, client.requests().element().apiKey());
+        } finally {
+            producer.close(Duration.ZERO);
+        }
+    }
+
+    @Test
+    public void testZeroBatchSizeKeepsRecordsInSeparateBatches() throws Exception {
+        MockTime time = new MockTime();
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1)));
+        client.delayReady(metadata.fetch().nodes().get(0), 1000);
+        KafkaProducer<String, String> producer = producerWithBatchingDisabled(metadata, client, time);
+        try {
+            ProducerRecord<String, String> record = new ProducerRecord<>(topic, 0, null, "");
+            producer.send(record);
+            producer.send(record);
+            time.sleep(1000);
+
+            client.waitForRequests(2, TestUtils.DEFAULT_MAX_WAIT_MS);
+            client.requests().forEach(request -> assertEquals(ApiKeys.PRODUCE, request.apiKey()));
+        } finally {
+            producer.close(Duration.ZERO);
+        }
+    }
+
     @Test
     public void testFlushCompleteSendOfInflightBatches() {
         Map<String, Object> configs = new HashMap<>();
