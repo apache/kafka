@@ -204,12 +204,11 @@ public class ApplicationEventProcessorTest {
                 Arguments.of(new AssignmentChangeEvent(12345, 12345, Collections.emptyList())));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testListOffsetsEventIsProcessed(boolean requireTimestamp) {
+    @Test
+    public void testListOffsetsEventIsProcessed() {
         ApplicationEventProcessor applicationEventProcessor = mock(ApplicationEventProcessor.class);
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
-        ApplicationEvent e = new ListOffsetsEvent(timestamps, calculateDeadlineMs(time, 100), requireTimestamp);
+        ApplicationEvent e = new ListOffsetsEvent(timestamps, calculateDeadlineMs(time, 100));
         applicationEventProcessor.process(e);
         verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));
     }

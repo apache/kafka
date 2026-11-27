@@ -179,21 +179,17 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * target timestamp.
      *
      * @param timestampsToSearch Partitions and target timestamps to get offsets for
-     * @param requireTimestamps  True if this should fail with an UnsupportedVersionException if the
-     *                           broker does not support fetching precise timestamps for offsets
      * @return Future containing the map of {@link TopicPartition} and {@link OffsetAndTimestamp}
      * found .The future will complete when the requests responses are received and
      * processed, following a call to {@link #poll(long)}
      */
     public CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsets(
-            Map<TopicPartition, Long> timestampsToSearch,
-            boolean requireTimestamps) {
-        return fetchOffsets(timestampsToSearch, requireTimestamps, false);
+            Map<TopicPartition, Long> timestampsToSearch) {
+        return fetchOffsets(timestampsToSearch, false);
     }
 
     private CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsets(
             Map<TopicPartition, Long> timestampsToSearch,
-            boolean requireTimestamps,
             boolean oneShot) {
         if (timestampsToSearch.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());
@@ -201,7 +197,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         metadata.addTransientTopics(OffsetFetcherUtils.topicsForPartitions(timestampsToSearch.keySet()));
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
                 timestampsToSearch,
-                requireTimestamps,
                 offsetFetcherUtils,
                 isolationLevel,
                 oneShot);
@@ -216,7 +211,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             }
         });
 
-        prepareFetchOffsetsRequests(timestampsToSearch, requireTimestamps, listOffsetsRequestState);
+        prepareFetchOffsetsRequests(timestampsToSearch, listOffsetsRequestState);
         return listOffsetsRequestState.globalResult.thenApply(
                 result -> OffsetFetcherUtils.buildOffsetsForTimeInternalResult(
                         timestampsToSearch,
@@ -259,7 +254,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                 // reachable on every outcome, so a failed LIST_OFFSETS doesn't block all future lag lookups.
                 // A successful response clears the flag as a side effect of updating the subscription state,
                 // so the call below is a no-op in that case.
-                fetchOffsets(timestampToSearch, false, true).whenComplete((__, error) ->
+                fetchOffsets(timestampToSearch, true).whenComplete((__, error) ->
                     offsetFetcherUtils.clearPartitionEndOffsetRequests(Set.of(topicPartition)));
             }
 
@@ -570,11 +565,10 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * partitions with unknown leader to the listOffsetsRequestState.remainingToSearch
      */
     private void prepareFetchOffsetsRequests(final Map<TopicPartition, Long> timestampsToSearch,
-                                             final boolean requireTimestamps,
                                              final ListOffsetsRequestState listOffsetsRequestState) {
         try {
             List<NetworkClientDelegate.UnsentRequest> unsentRequests = buildListOffsetsRequests(
-                    timestampsToSearch, requireTimestamps, listOffsetsRequestState);
+                    timestampsToSearch, listOffsetsRequestState);
             requestsToSend.addAll(unsentRequests);
         } catch (StaleMetadataException e) {
             if (listOffsetsRequestState.oneShot)
@@ -595,7 +589,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             Map<TopicPartition, Long> timestampsToSearch =
                     new HashMap<>(requestState.remainingToSearch);
             requestState.remainingToSearch.clear();
-            prepareFetchOffsetsRequests(timestampsToSearch, requestState.requireTimestamps, requestState);
+            prepareFetchOffsetsRequests(timestampsToSearch, requestState);
         });
     }
 
@@ -603,15 +597,12 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * Build ListOffsets requests to fetch offsets by target times for the specified partitions.
      *
      * @param timestampsToSearch the mapping between partitions and target time
-     * @param requireTimestamps  true if we should fail with an UnsupportedVersionException if the broker does
-     *                           not support fetching precise timestamps for offsets
      * @return A list of
      * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}
      * that can be polled to obtain the corresponding timestamps and offsets.
      */
     private List<NetworkClientDelegate.UnsentRequest> buildListOffsetsRequests(
             final Map<TopicPartition, Long> timestampsToSearch,
-            final boolean requireTimestamps,
             final ListOffsetsRequestState listOffsetsRequestState) {
         log.debug("Building ListOffsets request for partitions {}", timestampsToSearch);
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
@@ -647,7 +638,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             CompletableFuture<ListOffsetResult> partialResult = buildListOffsetRequestToNode(
                     node,
                     entry.getValue(),
-                    requireTimestamps,
                     unsentRequests);
 
             partialResult.whenComplete((result, error) -> {
@@ -668,10 +658,9 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private CompletableFuture<ListOffsetResult> buildListOffsetRequestToNode(
             Node node,
             Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> targetTimes,
-            boolean requireTimestamps,
             List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamps, isolationLevel)
+                .forConsumer(isolationLevel)
                 .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(targetTimes))
                 .setTimeoutMs(requestTimeoutMs);
 
@@ -731,7 +720,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             CompletableFuture<ListOffsetResult> partialResult = buildListOffsetRequestToNode(
                     node,
                     resetTimestamps,
-                    false,
                     unsentRequests);
 
             partialResult.whenComplete((result, error) -> {
@@ -876,7 +864,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         private final Map<TopicPartition, ListOffsetData> fetchedOffsets;
         private final Map<TopicPartition, Long> remainingToSearch;
         private final CompletableFuture<ListOffsetResult> globalResult;
-        final boolean requireTimestamps;
         final OffsetFetcherUtils offsetFetcherUtils;
         final IsolationLevel isolationLevel;
 
@@ -890,7 +877,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         final boolean oneShot;
 
         private ListOffsetsRequestState(Map<TopicPartition, Long> timestampsToSearch,
-                                        boolean requireTimestamps,
                                         OffsetFetcherUtils offsetFetcherUtils,
                                         IsolationLevel isolationLevel,
                                         boolean oneShot) {
@@ -899,7 +885,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             globalResult = new CompletableFuture<>();
 
             this.timestampsToSearch = timestampsToSearch;
-            this.requireTimestamps = requireTimestamps;
             this.offsetFetcherUtils = offsetFetcherUtils;
             this.isolationLevel = isolationLevel;
             this.oneShot = oneShot;

@@ -34,14 +34,11 @@ import java.util.Map;
  */
 public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestampInternal>> implements MetadataErrorNotifiableEvent {
     private final Map<TopicPartition, Long> timestampsToSearch;
-    private final boolean requireTimestamps;
 
     public ListOffsetsEvent(Map<TopicPartition, Long> timestampToSearch,
-                            long deadlineMs,
-                            boolean requireTimestamps) {
+                            long deadlineMs) {
         super(Type.LIST_OFFSETS, deadlineMs);
         this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
-        this.requireTimestamps = requireTimestamps;
     }
 
     /**
@@ -60,10 +57,6 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
         return timestampsToSearch;
     }
 
-    public boolean requireTimestamps() {
-        return requireTimestamps;
-    }
-
     @Override
     public void onMetadataError(Exception metadataError) {
         future().completeExceptionally(metadataError);
@@ -71,8 +64,6 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
 
     @Override
     public String toStringBase() {
-        return super.toStringBase() +
-                ", timestampsToSearch=" + timestampsToSearch +
-                ", requireTimestamps=" + requireTimestamps;
+        return super.toStringBase() + ", timestampsToSearch=" + timestampsToSearch;
     }
 }

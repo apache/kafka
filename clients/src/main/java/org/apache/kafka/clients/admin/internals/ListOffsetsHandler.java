@@ -105,8 +105,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
 
         int timeoutMs = options.timeoutMs() != null ? options.timeoutMs() : defaultApiTimeoutMs;
-        return ListOffsetsRequest.Builder.forConsumer(true,
-                        options.isolationLevel(),
+        return ListOffsetsRequest.Builder.forConsumer(options.isolationLevel(),
                         supportsMaxTimestamp,
                         requireEarliestLocalTimestamp,
                         requireTieredStorageTimestamp,
