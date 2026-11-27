@@ -86,8 +86,7 @@ public class DeleteAclsResponseTest {
         assertThrows(IllegalArgumentException.class, () -> new DeleteAclsResponse(
             new DeleteAclsResponseData()
                 .setThrottleTimeMs(10)
-                .setFilterResults(singletonList(UNKNOWN_RESPONSE)),
-            V1));
+                .setFilterResults(singletonList(UNKNOWN_RESPONSE))));
     }
 
     @Test
@@ -95,8 +94,7 @@ public class DeleteAclsResponseTest {
         final DeleteAclsResponse original = new DeleteAclsResponse(
             new DeleteAclsResponseData()
                 .setThrottleTimeMs(10)
-                .setFilterResults(asList(LITERAL_RESPONSE, PREFIXED_RESPONSE)),
-            V1);
+                .setFilterResults(asList(LITERAL_RESPONSE, PREFIXED_RESPONSE)));
         final Readable readable = original.serialize(V1);
 
         final DeleteAclsResponse result = DeleteAclsResponse.parse(readable, V1);

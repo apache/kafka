@@ -21,7 +21,6 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
 import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
@@ -38,7 +37,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -47,17 +45,10 @@ public class DescribeAclsResponse extends AbstractResponse {
 
     private final DescribeAclsResponseData data;
 
-    public DescribeAclsResponse(DescribeAclsResponseData data, short version) {
+    public DescribeAclsResponse(DescribeAclsResponseData data) {
         super(ApiKeys.DESCRIBE_ACLS);
         this.data = data;
-        validate(Optional.of(version));
-    }
-
-    // Skips version validation, visible for testing
-    DescribeAclsResponse(DescribeAclsResponseData data) {
-        super(ApiKeys.DESCRIBE_ACLS);
-        this.data = data;
-        validate(Optional.empty());
+        validate();
     }
 
     @Override
@@ -89,18 +80,10 @@ public class DescribeAclsResponse extends AbstractResponse {
     }
 
     public static DescribeAclsResponse parse(Readable readable, short version) {
-        return new DescribeAclsResponse(new DescribeAclsResponseData(readable, version), version);
+        return new DescribeAclsResponse(new DescribeAclsResponseData(readable, version));
     }
 
-    private void validate(Optional<Short> version) {
-        if (version.isPresent() && version.get() == 0) {
-            final boolean unsupported = acls().stream()
-                .anyMatch(acl -> acl.patternType() != PatternType.LITERAL.code());
-            if (unsupported) {
-                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
-            }
-        }
-
+    private void validate() {
         for (DescribeAclsResource resource : acls()) {
             if (resource.patternType() == PatternType.UNKNOWN.code() || resource.resourceType() == ResourceType.UNKNOWN.code())
                 throw new IllegalArgumentException("Contain UNKNOWN elements");

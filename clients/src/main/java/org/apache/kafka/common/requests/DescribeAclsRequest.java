@@ -20,7 +20,6 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.DescribeAclsRequestData;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -64,22 +63,10 @@ public class DescribeAclsRequest extends AbstractRequest {
     private DescribeAclsRequest(DescribeAclsRequestData data, short version) {
         super(ApiKeys.DESCRIBE_ACLS, version);
         this.data = data;
-        normalizeAndValidate(version);
+        validate();
     }
 
-    private void normalizeAndValidate(short version) {
-        if (version == 0) {
-            PatternType patternType = PatternType.fromCode(data.patternTypeFilter());
-            // On older brokers, no pattern types existed except LITERAL (effectively). So even though ANY is not
-            // directly supported on those brokers, we can get the same effect as ANY by setting the pattern type
-            // to LITERAL. Note that the wildcard `*` is considered `LITERAL` for compatibility reasons.
-            if (patternType == PatternType.ANY)
-                data.setPatternTypeFilter(PatternType.LITERAL.code());
-            else if (patternType != PatternType.LITERAL) {
-                throw new UnsupportedProtocolFieldException(patternType.name(), apiKey().name(), version, 1);
-            }
-        }
-
+    private void validate() {
         if (data.patternTypeFilter() == PatternType.UNKNOWN.code()
                 || data.resourceTypeFilter() == ResourceType.UNKNOWN.code()
                 || data.permissionType() == AclPermissionType.UNKNOWN.code()
@@ -100,7 +87,7 @@ public class DescribeAclsRequest extends AbstractRequest {
             .setThrottleTimeMs(throttleTimeMs)
             .setErrorCode(error.error().code())
             .setErrorMessage(error.message());
-        return new DescribeAclsResponse(response, version());
+        return new DescribeAclsResponse(response);
     }
 
     public static DescribeAclsRequest parse(Readable readable, short version) {

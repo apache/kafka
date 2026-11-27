@@ -20,7 +20,6 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
@@ -63,25 +62,10 @@ public class DeleteAclsRequest extends AbstractRequest {
     private DeleteAclsRequest(DeleteAclsRequestData data, short version) {
         super(ApiKeys.DELETE_ACLS, version);
         this.data = data;
-        normalizeAndValidate();
+        validate();
     }
 
-    private void normalizeAndValidate() {
-        if (version() == 0) {
-            for (DeleteAclsRequestData.DeleteAclsFilter filter : data.filters()) {
-                PatternType patternType = PatternType.fromCode(filter.patternTypeFilter());
-
-                // On older brokers, no pattern types existed except LITERAL (effectively). So even though ANY is not
-                // directly supported on those brokers, we can get the same effect as ANY by setting the pattern type
-                // to LITERAL. Note that the wildcard `*` is considered `LITERAL` for compatibility reasons.
-                if (patternType == PatternType.ANY)
-                    filter.setPatternTypeFilter(PatternType.LITERAL.code());
-                else if (patternType != PatternType.LITERAL) {
-                    throw new UnsupportedProtocolFieldException(patternType.name(), apiKey().name(), version(), 1);
-                }
-            }
-        }
-
+    private void validate() {
         final boolean unknown = data.filters().stream().anyMatch(filter ->
                 filter.patternTypeFilter() == PatternType.UNKNOWN.code()
                         || filter.resourceTypeFilter() == ResourceType.UNKNOWN.code()
@@ -112,7 +96,7 @@ public class DeleteAclsRequest extends AbstractRequest {
                 .setErrorMessage(apiError.message()));
         return new DeleteAclsResponse(new DeleteAclsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setFilterResults(filterResults), version());
+            .setFilterResults(filterResults));
     }
 
     public static DeleteAclsRequest parse(Readable readable, short version) {

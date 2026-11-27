@@ -38,7 +38,6 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -93,18 +92,17 @@ public class KafkaAdminClientConfigTest extends KafkaAdminClientTestBase {
 
             // Test a call where we get back ACL1 and ACL2.
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(new DescribeAclsResponseData()
-                .setResources(DescribeAclsResponse.aclsResources(asList(ACL1, ACL2))), ApiKeys.DESCRIBE_ACLS.latestVersion()));
+                .setResources(DescribeAclsResponse.aclsResources(asList(ACL1, ACL2)))));
             assertCollectionIs(env.adminClient().describeAcls(FILTER1).values().get(), ACL1, ACL2);
 
             // Test a call where we get back no results.
-            env.kafkaClient().prepareResponse(new DescribeAclsResponse(new DescribeAclsResponseData(),
-                    ApiKeys.DESCRIBE_ACLS.latestVersion()));
+            env.kafkaClient().prepareResponse(new DescribeAclsResponse(new DescribeAclsResponseData()));
             assertTrue(env.adminClient().describeAcls(FILTER2).values().get().isEmpty());
 
             // Test a call where we get back an error.
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(new DescribeAclsResponseData()
                 .setErrorCode(Errors.SECURITY_DISABLED.code())
-                .setErrorMessage("Security is disabled"), ApiKeys.DESCRIBE_ACLS.latestVersion()));
+                .setErrorMessage("Security is disabled")));
             TestUtils.assertFutureThrows(SecurityDisabledException.class, env.adminClient().describeAcls(FILTER2).values());
 
             // Test a call where we supply an invalid filter.
@@ -152,8 +150,7 @@ public class KafkaAdminClientConfigTest extends KafkaAdminClientTestBase {
                     .setThrottleTimeMs(0)
                     .setFilterResults(asList(new DeleteAclsResponseData.DeleteAclsFilterResult()
                                     .setErrorCode(Errors.NOT_CONTROLLER.code())
-                                    .setErrorMessage("not controller"))),
-                    ApiKeys.DELETE_ACLS.latestVersion()));
+                                    .setErrorMessage("not controller")))));
             // should retry the describe cluster to update the metadata
             env.kafkaClient().prepareResponse(
                     prepareDescribeClusterResponse(0,
@@ -168,8 +165,7 @@ public class KafkaAdminClientConfigTest extends KafkaAdminClientTestBase {
                     .setThrottleTimeMs(0)
                     .setFilterResults(asList(
                             new DeleteAclsResponseData.DeleteAclsFilterResult()
-                                    .setMatchingAcls(singletonList(DeleteAclsResponse.matchingAcl(ACL1, ApiError.NONE))))),
-                    ApiKeys.DELETE_ACLS.latestVersion()));
+                                    .setMatchingAcls(singletonList(DeleteAclsResponse.matchingAcl(ACL1, ApiError.NONE)))))));
             DeleteAclsResult results = env.adminClient().deleteAcls(asList(FILTER1));
             Collection<AclBinding> deleted = results.all().get();
             assertCollectionIs(deleted, ACL1);
@@ -220,8 +216,7 @@ public class KafkaAdminClientConfigTest extends KafkaAdminClientTestBase {
                             DeleteAclsResponse.matchingAcl(ACL2, ApiError.NONE))),
                     new DeleteAclsResponseData.DeleteAclsFilterResult()
                         .setErrorCode(Errors.SECURITY_DISABLED.code())
-                        .setErrorMessage("No security"))),
-                    ApiKeys.DELETE_ACLS.latestVersion()));
+                        .setErrorMessage("No security")))));
             DeleteAclsResult results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Map<AclBindingFilter, KafkaFuture<FilterResults>> filterResults = results.values();
             FilterResults filter1Results = filterResults.get(FILTER1).get();
@@ -246,8 +241,7 @@ public class KafkaAdminClientConfigTest extends KafkaAdminClientTestBase {
                                 .setOperation(AclOperation.ALTER.code())
                                 .setResourceType(ResourceType.CLUSTER.code())
                                 .setPatternType(FILTER2.patternFilter().patternType().code()))),
-                    new DeleteAclsResponseData.DeleteAclsFilterResult())),
-                    ApiKeys.DELETE_ACLS.latestVersion()));
+                    new DeleteAclsResponseData.DeleteAclsFilterResult()))));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             assertTrue(results.values().get(FILTER2).get().values().isEmpty());
             TestUtils.assertFutureThrows(SecurityDisabledException.class, results.all());
@@ -259,8 +253,7 @@ public class KafkaAdminClientConfigTest extends KafkaAdminClientTestBase {
                     new DeleteAclsResponseData.DeleteAclsFilterResult()
                         .setMatchingAcls(singletonList(DeleteAclsResponse.matchingAcl(ACL1, ApiError.NONE))),
                     new DeleteAclsResponseData.DeleteAclsFilterResult()
-                        .setMatchingAcls(singletonList(DeleteAclsResponse.matchingAcl(ACL2, ApiError.NONE))))),
-                    ApiKeys.DELETE_ACLS.latestVersion()));
+                        .setMatchingAcls(singletonList(DeleteAclsResponse.matchingAcl(ACL2, ApiError.NONE)))))));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Collection<AclBinding> deleted = results.all().get();
             assertCollectionIs(deleted, ACL1, ACL2);

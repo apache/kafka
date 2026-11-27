@@ -20,7 +20,6 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
@@ -44,10 +43,10 @@ public class DeleteAclsResponse extends AbstractResponse {
 
     private final DeleteAclsResponseData data;
 
-    public DeleteAclsResponse(DeleteAclsResponseData data, short version) {
+    public DeleteAclsResponse(DeleteAclsResponseData data) {
         super(ApiKeys.DELETE_ACLS);
         this.data = data;
-        validate(version);
+        validate();
     }
 
     @Override
@@ -75,7 +74,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     public static DeleteAclsResponse parse(Readable readable, short version) {
-        return new DeleteAclsResponse(new DeleteAclsResponseData(readable, version), version);
+        return new DeleteAclsResponse(new DeleteAclsResponseData(readable, version));
     }
 
     @Override
@@ -83,15 +82,7 @@ public class DeleteAclsResponse extends AbstractResponse {
         return data.toString();
     }
 
-    private void validate(short version) {
-        if (version == 0) {
-            final boolean unsupported = filterResults().stream()
-                .flatMap(r -> r.matchingAcls().stream())
-                .anyMatch(matchingAcl -> matchingAcl.patternType() != PatternType.LITERAL.code());
-            if (unsupported)
-                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
-        }
-
+    private void validate() {
         final boolean unknown = filterResults().stream()
                 .flatMap(r -> r.matchingAcls().stream())
                 .anyMatch(matchingAcl -> matchingAcl.patternType() == PatternType.UNKNOWN.code()
