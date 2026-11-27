@@ -52,6 +52,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -251,6 +252,7 @@ public class Selector implements Selectable, AutoCloseable {
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize,
                         Uuid clientInstanceId) throws IOException {
+        Objects.requireNonNull(clientInstanceId, "clientInstanceId must not be null");
         ensureNotRegistered(id);
         SocketChannel socketChannel = SocketChannel.open();
         SelectionKey key = null;
