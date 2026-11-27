@@ -49,6 +49,7 @@ public final class Lz4BlockOutputStream extends OutputStream {
     private final FLG flg;
     private final BD bd;
     private final int maxBlockSize;
+    private final long contentSize;
     private OutputStream out;
     private byte[] buffer;
     private byte[] compressedBuffer;
@@ -69,6 +70,26 @@ public final class Lz4BlockOutputStream extends OutputStream {
      * @throws IOException
      */
     public Lz4BlockOutputStream(OutputStream out, int blockSize, int level, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
+        this(out, blockSize, level, blockChecksum, useBrokenFlagDescriptorChecksum, -1);
+    }
+
+    /**
+     * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
+     *
+     * @param out The output stream to compress
+     * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
+     *            values will generate an exception
+     * @param level The compression level to use
+     * @param blockChecksum Default: false. When true, a XXHash32 checksum is computed and appended to the stream for
+     *            every block of data
+     * @param useBrokenFlagDescriptorChecksum Default: false. When true, writes an incorrect FrameDescriptor checksum
+     *            compatible with older kafka clients.
+     * @param contentSize The uncompressed content size to write in the frame header, or a negative value to omit.
+     *            Per the LZ4 frame format specification, this is an optional 8-byte unsigned little-endian value
+     *            that allows decompressors to pre-allocate buffers.
+     * @throws IOException
+     */
+    public Lz4BlockOutputStream(OutputStream out, int blockSize, int level, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum, long contentSize) throws IOException {
         this.out = out;
         /*
          * lz4-java provides two types of compressors; fastCompressor, which requires less memory but fast compression speed (with default compression level only),
@@ -79,8 +100,9 @@ public final class Lz4BlockOutputStream extends OutputStream {
         compressor = level == CompressionType.LZ4.defaultLevel() ? LZ4Factory.fastestInstance().fastCompressor() : LZ4Factory.fastestInstance().highCompressor(level);
         checksum = XXHashFactory.fastestInstance().hash32();
         this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
+        this.contentSize = contentSize;
         bd = new BD(blockSize);
-        flg = new FLG(blockChecksum);
+        flg = new FLG(blockChecksum, contentSize >= 0);
         bufferOffset = 0;
         maxBlockSize = bd.getBlockMaximumSize();
         buffer = new byte[maxBlockSize];
@@ -122,7 +144,14 @@ public final class Lz4BlockOutputStream extends OutputStream {
         bufferOffset = 4;
         buffer[bufferOffset++] = flg.toByte();
         buffer[bufferOffset++] = bd.toByte();
-        // TODO write uncompressed content size, update flg.validate()
+
+        // Write the uncompressed content size as an 8-byte little-endian value when the flag is set.
+        // Per the LZ4 frame format spec, this is placed between the BD byte and the HC checksum.
+        if (flg.isContentSizeSet()) {
+            for (int i = 0; i < Long.BYTES; i++) {
+                buffer[bufferOffset++] = (byte) (contentSize >>> (i * 8));
+            }
+        }
 
         // compute checksum on all descriptor fields
         int offset = 4;
@@ -271,7 +300,11 @@ public final class Lz4BlockOutputStream extends OutputStream {
         private final int version;
 
         public FLG(boolean blockChecksum) {
-            this(0, 0, 0, blockChecksum ? 1 : 0, 1, VERSION);
+            this(blockChecksum, false);
+        }
+
+        public FLG(boolean blockChecksum, boolean contentSize) {
+            this(0, 0, contentSize ? 1 : 0, blockChecksum ? 1 : 0, 1, VERSION);
         }
 
         private FLG(int reserved,
