@@ -36,12 +36,16 @@ run-name: Reviewers Trailer for ${{ github.event.workflow_run.display_title }}
 
 jobs:
   append-trailer:
-    # Only react to review submissions. The "Pull Request Reviewed" workflow
-    # also runs on `pull_request` (open / edit), where the actor is the PR
-    # author rather than a reviewer.
+    # "Pull Request Reviewed" runs on a review and on `pull_request` (open / edit).
+    # On a review, the reviewer is added to the Reviewers trailer.
+    # On open / edit, the actor is the PR author or a committer who edits the
+    # description. Nobody is added. The script only writes the existing
+    # Reviewers trailer in the standard format, so a trailer typed by hand is
+    # folded before the merge.
     if: |
       github.event_name == 'workflow_run' &&
-      github.event.workflow_run.event == 'pull_request_review'
+      (github.event.workflow_run.event == 'pull_request_review' ||
+       github.event.workflow_run.event == 'pull_request')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -55,12 +59,12 @@ jobs:
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - name: Append reviewer trailer
+      - name: Update Reviewers trailer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          REVIEWER_LOGIN: ${{ github.event.workflow_run.actor.login }}
+          REVIEWER_LOGIN: ${{ github.event.workflow_run.event == 'pull_request_review' && github.event.workflow_run.actor.login || '' }}
         run: |
           set -e
           # Match the run's head_sha against open PRs. Stream matches across
@@ -72,6 +76,10 @@ jobs:
             echo "No open PR found for head sha $HEAD_SHA; nothing to do."
             exit 0
           fi
-          echo "Crediting reviewer '$REVIEWER_LOGIN' on PR #$PR_NUMBER."
+          if [ -n "$REVIEWER_LOGIN" ]; then
+            echo "Crediting reviewer '$REVIEWER_LOGIN' on PR #$PR_NUMBER."
+          else
+            echo "Formatting the Reviewers trailer of PR #$PR_NUMBER."
+          fi
           PR_NUMBER="$PR_NUMBER" REVIEWER_LOGIN="$REVIEWER_LOGIN" \
             python .github/scripts/pr-reviewers-trailer.py

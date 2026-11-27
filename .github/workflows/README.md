@@ -127,9 +127,31 @@ The following checks are performed on our PRs:
 * Title starts with "KAFKA-", "MINOR", or "HOTFIX"
 * Body is not empty
 * Body includes "Reviewers:" if the PR is approved
+* "Reviewers:" is in the last paragraph, and that paragraph has only trailers
 
-With the merge queue, our PR title and body will become the commit subject and message.
-This linting step will help to ensure that we have nice looking commits.
+Our PR title and body become the commit subject and message when a PR is squashed
+and merged. This linting step will help to ensure that we have nice looking commits.
+
+The linter only reads the PR. It does not edit the title or the body. GitHub wraps
+lines longer than 72 characters and converts line endings when it builds the default
+squash commit message, so the PR body does not need to be reformatted beforehand.
+
+GitHub does not indent the lines it wraps. A wrapped "Reviewers:" trailer without
+indentation is no longer a git trailer. For that reason pr-reviewers-trailer.py writes
+the trailer already folded, with a leading space on each continuation line. It runs
+when someone reviews or comments, and also when the PR body is edited.
+
+To add a reviewer by hand, write the names after "Reviewers:" in the last paragraph,
+separated by commas. The script takes care of the line breaks. If the last
+paragraph has more than one "Reviewers:" line, the script joins them into one.
+
+The scripts have tests that run without network access. The
+[pr-scripts-test.yml](pr-scripts-test.yml) workflow runs them when the scripts change.
+To run them locally:
+
+```
+python -m unittest discover -s .github/scripts -p 'test_pr_scripts.py'
+```
 
 ### Stale PRs
 

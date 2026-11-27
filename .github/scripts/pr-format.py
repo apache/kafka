@@ -16,14 +16,14 @@
 from collections import defaultdict
 from io import BytesIO
 import json
+import re
 import logging
 import os
 import subprocess
 import shlex
 import sys
 import tempfile
-import textwrap
-from typing import Dict, Optional, TextIO
+from typing import List, Dict, Optional, TextIO
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -63,44 +63,46 @@ def write_commit(io: TextIO, title: str, body: str):
 
 
 def parse_trailers(title, body) -> Dict:
+    """Return the trailers that git reads from the message. Keys are in lower case."""
     trailers = defaultdict(list)
 
     with tempfile.NamedTemporaryFile() as fp:
         write_commit(fp, title, body)
-        cmd = f"git interpret-trailers --trim-empty --parse {fp.name}"
+        # --no-divider: a "---" line is a Markdown rule here, not the start of a patch.
+        cmd = f"git interpret-trailers --no-divider --trim-empty --parse {fp.name}"
         p = subprocess.run(shlex.split(cmd), capture_output=True)
         fp.close()
 
-    for line in p.stdout.decode().splitlines():
+    # Split on "\n" only. With CRLF line endings git leaves a "\r" inside a folded value.
+    for line in p.stdout.decode().split("\n"):
+        if ":" not in line:
+            continue
         key, value = line.split(":", 1)
-        trailers[key].append(value.strip())
+        trailers[key.strip().lower()].append(" ".join(value.split()))
 
     return trailers
 
 
-def split_paragraphs(text: str):
-    """
-    Split the given text into a generator of paragraph lines and a boolean "markdown" flag.
+def last_paragraph_start(lines: List[str]) -> int:
+    """Index of the first line of the last paragraph. Blank lines at the end are not counted."""
+    end = len(lines)
+    while end > 0 and not lines[end - 1].strip():
+        end -= 1
+    return max((i + 1 for i in range(end) if not lines[i].strip()), default=0)
 
-    If any line of a paragraph starts with a markdown character, we will assume the whole paragraph
-    contains markdown.
+
+def reviewers_trailer_is_misplaced(title: str, body: str) -> bool:
+    """True if a "Reviewers:" line is not a trailer in the last paragraph.
+
+    git reads trailers only from the last paragraph. A "Reviewers:" line
+    anywhere else is plain text, and the people on it get no credit.
     """
-    lines = text.splitlines(keepends=True)
-    paragraph = []
-    markdown = False
-    for line in lines:
-        if line.strip() == "":
-            if len(paragraph) > 0:
-                yield paragraph, markdown
-                paragraph.clear()
-                markdown = False
-        else:
-            if line[0] in ("#", "*", "-", "=") or line[0].isdigit():
-                markdown = True
-            if "```" in line:
-                markdown = True
-            paragraph.append(line)
-    yield paragraph, markdown
+    lines = body.split("\n")
+    # A "Reviewers:" line with no value is not counted. git drops an empty trailer.
+    is_reviewers = [bool(re.match(r"\s*reviewers\s*:\s*\S", line, re.IGNORECASE)) for line in lines]
+    if any(is_reviewers[:last_paragraph_start(lines)]):
+        return True
+    return sum(is_reviewers) > len(parse_trailers(title, body).get("reviewers", []))
 
 
 if __name__ == "__main__":
@@ -120,6 +122,9 @@ if __name__ == "__main__":
     Body checks:
     * Is not empty
     * Has "Reviewers:" trailer if the PR is approved
+    * Every "Reviewers:" line is in the last paragraph, where git reads it as a trailer
+
+    This script only reads the PR. It never edits the title or the body.
     """
 
     pr_number = get_env("PR_NUMBER")
@@ -131,7 +136,7 @@ if __name__ == "__main__":
 
     gh_json = json.loads(p.stdout)
     title = gh_json["title"]
-    body = gh_json["body"]
+    body = gh_json["body"] or ""
     reviews = gh_json["reviews"]
 
     checks = [] # (bool (0=ok, 1=error), message)
@@ -154,40 +159,14 @@ if __name__ == "__main__":
     check("Delete this text and replace" not in body, "PR template text not present", "PR template text should be removed")
     check("Committer Checklist" not in body, "Old PR template text not present", "Old PR template text should be removed")
 
-    paragraph_iter = split_paragraphs(body)
-    new_paragraphs = []
-    for p, markdown in paragraph_iter:
-        if markdown:
-            # If a paragraph looks like it has markdown in it, wrap each line separately.
-            new_lines = []
-            for line in p:
-                new_lines.append(textwrap.fill(line, width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=False))
-            rewrapped_p = "\n".join(new_lines)
-        else:
-            indent = ""
-            if len(p) > 0 and p[0].startswith("Reviewers:"):
-                indent = " "
-            rewrapped_p = textwrap.fill("".join(p), subsequent_indent=indent, width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=True)
-        new_paragraphs.append(rewrapped_p + "\n")
-    body = "\n".join(new_paragraphs)
-
-    if get_env("GITHUB_ACTIONS"):
-        with tempfile.NamedTemporaryFile() as fp:
-            fp.write(body.encode())
-            fp.flush()
-            cmd = f"gh pr edit {pr_number} --body-file {fp.name}"
-            p = subprocess.run(shlex.split(cmd), capture_output=True)
-            fp.close()
-            if p.returncode != 0:
-                logger.error(f"Could not update PR {pr_number}. STDOUT: {p.stdout.decode()}")
-    else:
-        logger.info(f"Not reformatting {pr_number} since this is not running on GitHub Actions.")
-
     # Check for Reviewers
+    reviewers_misplaced = reviewers_trailer_is_misplaced(title, body)
+    check(not reviewers_misplaced, "Every 'Reviewers:' line is a trailer",
+          "'Reviewers:' must be in the last paragraph, with only trailers in it. Move other text above, and leave an empty line.")
+    reviewers_in_body = parse_trailers(title, body).get("reviewers", [])
+
     approved = has_approval(reviews)
     if approved:
-        trailers = parse_trailers(title, body)
-        reviewers_in_body = trailers.get("Reviewers", [])
         check(len(reviewers_in_body) > 0, "Found 'Reviewers' in commit body", "Pull Request is approved, but no 'Reviewers' found in commit body")
         if len(reviewers_in_body) > 0:
             for reviewer_in_body in reviewers_in_body:
@@ -206,6 +185,19 @@ if __name__ == "__main__":
     logger.debug("Validation results:")
     for err, msg in checks:
         logger.debug(f"* {msg}")
+
+    if reviewers_misplaced:
+        # The status check message has to be short. The example goes to the run page.
+        logger.debug("\nTo fix the 'Reviewers:' trailer, end the description like this:\n")
+        logger.debug("<pre>")
+        logger.debug("The text of the description.")
+        logger.debug("")
+        logger.debug("Co-authored-by: Name &lt;email&gt;")
+        logger.debug("Reviewers: Name &lt;email&gt;, Name &lt;email&gt;")
+        logger.debug("</pre>\n")
+        logger.debug("* The trailers are the last paragraph, after an empty line.")
+        logger.debug("* The paragraph has only trailers. Each trailer is on its own line.")
+        logger.debug("* There is no text below the trailers.")
 
     for err, msg in checks:
         # Just output the first error for the status message. STDOUT becomes the status check message
