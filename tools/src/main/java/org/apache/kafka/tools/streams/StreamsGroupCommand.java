@@ -442,15 +442,18 @@ public class StreamsGroupCommand {
                     String fmt = "%" + -groupLen + "s %" + -maxTopicLen + "s %" + -maxPartitionLen + "s %s\n";
                     System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "OFFSET-LAG");
                     for (Map.Entry<TopicPartition, OffsetsInfo> offset : offsets.entrySet()) {
-                        System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), offset.getValue().lag);
+                        System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(),
+                            offset.getValue().lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE));
                     }
                 } else {
                     String fmt = "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %-15s%n";
                     System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LEADER-EPOCH", "LOG-END-OFFSET", "OFFSET-LAG");
                     for (Map.Entry<TopicPartition, OffsetsInfo> offset : offsets.entrySet()) {
                         System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(),
-                            offset.getValue().currentOffset.map(Object::toString).orElse("-"), offset.getValue().leaderEpoch.map(Object::toString).orElse("-"),
-                            offset.getValue().logEndOffset, offset.getValue().lag);
+                            offset.getValue().currentOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                            offset.getValue().leaderEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                            offset.getValue().logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                            offset.getValue().lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE));
                     }
                 }
             }
@@ -462,13 +465,19 @@ public class StreamsGroupCommand {
             for (StreamsGroupMemberDescription memberDescription : members) {
                 allTp.addAll(getTopicPartitions(memberDescription.assignment().activeTasks(), description));
             }
+            // A member that stopped without leaving the group keeps its assignment until its session times out, so the
+            // assignment can reference a topic or partition that has since been deleted. listOffsets would fail or retry
+            // until the timeout for those, so only query partitions with a leader and report the rest as unknown.
+            Set<TopicPartition> partitionsWithoutLeader = new HashSet<>(groupOffsetsResetter.filterNoneLeaderPartitions(allTp));
             // fetch latest and earliest offsets
             Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
             Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
 
             for (TopicPartition tp : allTp) {
-                earliest.put(tp, OffsetSpec.earliest());
-                latest.put(tp, OffsetSpec.latest());
+                if (!partitionsWithoutLeader.contains(tp)) {
+                    earliest.put(tp, OffsetSpec.earliest());
+                    latest.put(tp, OffsetSpec.latest());
+                }
             }
             Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = adminClient.listOffsets(
                 earliest,
@@ -481,16 +490,14 @@ public class StreamsGroupCommand {
             Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description.groupId());
 
             Map<TopicPartition, OffsetsInfo> output = new HashMap<>();
-            for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
-                final Optional<Long> currentOffset = committedOffsets.containsKey(tp.getKey()) ? Optional.of(committedOffsets.get(tp.getKey()).offset()) : Optional.empty();
-                final Optional<Integer> leaderEpoch = committedOffsets.containsKey(tp.getKey()) ? committedOffsets.get(tp.getKey()).leaderEpoch() : Optional.empty();
-                final long lag = currentOffset.map(current -> latestResult.get(tp.getKey()).offset() - current).orElseGet(() -> latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
-                output.put(tp.getKey(),
-                    new OffsetsInfo(
-                        currentOffset,
-                        leaderEpoch,
-                        latestResult.get(tp.getKey()).offset(),
-                        lag));
+            for (TopicPartition tp : allTp) {
+                final Optional<OffsetAndMetadata> committed = Optional.ofNullable(committedOffsets.get(tp));
+                final Optional<Long> currentOffset = committed.map(OffsetAndMetadata::offset);
+                final Optional<Integer> leaderEpoch = committed.flatMap(OffsetAndMetadata::leaderEpoch);
+                // empty for partitions without a leader, which were not queried
+                final Optional<Long> logEndOffset = Optional.ofNullable(latestResult.get(tp)).map(ListOffsetsResult.ListOffsetsResultInfo::offset);
+                final Optional<Long> lag = logEndOffset.map(end -> end - currentOffset.orElseGet(() -> earliestResult.get(tp).offset()));
+                output.put(tp, new OffsetsInfo(currentOffset, leaderEpoch, logEndOffset, lag));
             }
             return output;
         }
@@ -1115,6 +1122,6 @@ public class StreamsGroupCommand {
         }
     }
 
-    public record OffsetsInfo(Optional<Long> currentOffset, Optional<Integer> leaderEpoch, Long logEndOffset, Long lag) {
+    public record OffsetsInfo(Optional<Long> currentOffset, Optional<Integer> leaderEpoch, Optional<Long> logEndOffset, Optional<Long> lag) {
     }
 }
