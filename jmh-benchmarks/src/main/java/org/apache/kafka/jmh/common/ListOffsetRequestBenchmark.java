@@ -65,12 +65,14 @@ public class ListOffsetRequestBenchmark {
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
             String topic = UUID.randomUUID().toString();
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-                ListOffsetsRequestData.ListOffsetsPartition data = new ListOffsetsRequestData.ListOffsetsPartition();
+                ListOffsetsRequestData.ListOffsetsPartition data = new ListOffsetsRequestData.ListOffsetsPartition()
+                    .setPartitionIndex(partitionId);
                 this.offsetData.put(new TopicPartition(topic, partitionId), data);
             }
         }
 
         this.offsetRequest = ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(offsetData))
                 .build(ApiKeys.LIST_OFFSETS.latestVersion());
     }
 
