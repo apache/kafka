@@ -272,12 +272,12 @@ class SocketServerTest {
     val address = plainSocket.getLocalAddress
     val clientId = "clientId"
 
-    // Send ApiVersionsRequest - unknown expected
+    // Send ApiVersionsRequest - if version < 3, unknown expected. Otherwise, client info expected.
     sendRequest(plainSocket, apiVersionRequestBytes(clientId, version))
     var receivedReq = receiveRequest(server.dataPlaneRequestChannel)
 
-    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareName)
-    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareVersion)
+    assertEquals(expectedClientSoftwareName, receivedReq.context.clientInformation.softwareName)
+    assertEquals(expectedClientSoftwareVersion, receivedReq.context.clientInformation.softwareVersion)
 
     server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
 
