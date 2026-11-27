@@ -155,6 +155,8 @@ public class InternalTopologyBuilder {
     // all global topics
     private final Set<String> globalTopics = new HashSet<>();
 
+    private final Set<String> globalSourceNodes = new HashSet<>();
+
     private final Set<String> noneResetTopics = new HashSet<>();
 
     private final Set<String> earliestResetTopics = new HashSet<>();
@@ -639,7 +641,9 @@ public class InternalTopologyBuilder {
         verifyName(sourceName);
 
         Objects.requireNonNull(topic, "topic cannot be null");
-        validateTopicNotAlreadyRegistered(topic);
+        if (globalTopics.contains(topic)) {
+            throw new TopologyException("Topic " + topic + " has already been registered by another source.");
+        }
 
         verifyName(processorName);
         if (sourceName.equals(processorName)) {
@@ -674,6 +678,7 @@ public class InternalTopologyBuilder {
         );
 
         globalTopics.add(topic);
+        globalSourceNodes.add(sourceName);
         nodeFactories.put(sourceName, new SourceNodeFactory<>(
             sourceName,
             topics,
@@ -700,7 +705,7 @@ public class InternalTopologyBuilder {
     }
 
     private void validateTopicNotAlreadyRegistered(final String topic) {
-        if (rawSourceTopicNames.contains(topic) || globalTopics.contains(topic)) {
+        if (rawSourceTopicNames.contains(topic)) {
             throw new TopologyException("Topic " + topic + " has already been registered by another source.");
         }
 
@@ -752,7 +757,12 @@ public class InternalTopologyBuilder {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
         storeToChangelogTopic.put(sourceStoreName, topic);
-        changelogTopicToStore.put(topic, sourceStoreName);
+        // Store partition lags are collected from local tasks, not the global thread.
+        if (globalStateBuilders.containsKey(sourceStoreName)) {
+            changelogTopicToStore.putIfAbsent(topic, sourceStoreName);
+        } else {
+            changelogTopicToStore.put(topic, sourceStoreName);
+        }
     }
 
     public final void addInternalTopic(final String topicName,
@@ -1211,8 +1221,8 @@ public class InternalTopologyBuilder {
                 if (topics != null) {
                     // if some of the topics are internal, add them to the internal topics
                     for (final String topic : topics) {
-                        // skip global topic as they don't need partition assignment
-                        if (globalTopics.contains(topic)) {
+                        // Global sources don't need partition assignment, even if a local source shares their topic.
+                        if (isGlobalSource(node)) {
                             continue;
                         }
                         if (internalTopicNamesWithProperties.containsKey(topic)) {
@@ -1554,13 +1564,7 @@ public class InternalTopologyBuilder {
     }
 
     private boolean isGlobalSource(final String nodeName) {
-        final NodeFactory<?, ?, ?, ?> nodeFactory = nodeFactories.get(nodeName);
-
-        if (nodeFactory instanceof SourceNodeFactory) {
-            final List<String> topics = ((SourceNodeFactory<?, ?>) nodeFactory).topics;
-            return topics != null && topics.size() == 1 && globalTopics.contains(topics.get(0));
-        }
-        return false;
+        return globalSourceNodes.contains(nodeName);
     }
 
     public Set<String> stateStoreNamesForSubtopology(final int subtopologyId) {
