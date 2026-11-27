@@ -174,6 +174,7 @@ import org.apache.kafka.server.share.persister.TopicData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -13001,16 +13002,28 @@ public class GroupMetadataManagerTest {
         assertEquals(10, context.groupMetadataManager.consumerGroup(consumerGroupId).groupEpoch());
     }
 
-    @Test
-    public void testConsumerGroupHeartbeatWithStableClassicGroup() {
+    /**
+     * Tests the upgrade of a classic group at different stages of a rebalance. The classic group is advanced
+     * from Stable at generation 1 to the given state, then a new member joins with the consumer protocol.
+     *
+     * @param state The state of the classic group when it is upgraded.
+     * @see #testConsumerGroupHeartbeatWithClassicGroupFromExistingStaticMember(ClassicGroupState)
+     * @see #testConsumerGroupHeartbeatWithClassicGroupFromNewMemberWithEmptyResolvedRegex(ClassicGroupState)
+     * @see "ConsumerProtocolMigrationTest#testUpgradeFromClassicGroup(ClassicGroupState)"
+     */
+    @ParameterizedTest
+    @EnumSource(value = ClassicGroupState.class, names = {"PREPARING_REBALANCE", "COMPLETING_REBALANCE", "STABLE"})
+    public void testConsumerGroupHeartbeatWithClassicGroup(ClassicGroupState state) throws Exception {
         String groupId = "group-id";
         String memberId1 = "member-id-1";
         String memberId2 = "member-id-2";
+        String memberId3 = "member-id-3";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
+        // The new target assignment moves foo-1 from member 1 to member 3.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
             memberId1, new MemberAssignmentImpl(mkAssignment(
@@ -13018,11 +13031,14 @@ public class GroupMetadataManagerTest {
             )),
             memberId2, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(barTopicId, 0)
+            )),
+            memberId3, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)
             ))
         )));
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 1)
+            .addTopic(fooTopicId, fooTopicName, 2)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
             .buildCoordinatorMetadataImage();
@@ -13033,28 +13049,40 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(metadataImage)
             .build();
 
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
-        protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols1 = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
+        protocols1.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
             .setName("range")
             .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
                 List.of(fooTopicName, barTopicName),
                 null,
                 List.of(
                     new TopicPartition(fooTopicName, 0),
-                    new TopicPartition(barTopicName, 0)
+                    new TopicPartition(fooTopicName, 1)
                 )
             ))))
         );
 
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols2 = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
+        protocols2.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                List.of(fooTopicName, barTopicName),
+                null,
+                List.of(new TopicPartition(barTopicName, 0))
+            ))))
+        );
+
         Map<String, byte[]> assignments = Map.of(
-            memberId1,
-            Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
+            memberId1, Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
                 new TopicPartition(fooTopicName, 0),
+                new TopicPartition(fooTopicName, 1)
+            )))),
+            memberId2, Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
                 new TopicPartition(barTopicName, 0)
             ))))
         );
 
-        // Create a stable classic group with member 1.
+        // Create a stable classic group with leader member 1 and follower member 2.
         ClassicGroup group = context.createClassicGroup(groupId);
         group.setProtocolName(Optional.of("range"));
         group.add(
@@ -13066,32 +13094,122 @@ public class GroupMetadataManagerTest {
                 10000,
                 5000,
                 "consumer",
-                protocols,
+                protocols1,
                 assignments.get(memberId1)
+            )
+        );
+        group.add(
+            new ClassicGroupMember(
+                memberId2,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols2,
+                assignments.get(memberId2)
             )
         );
 
         group.transitionTo(PREPARING_REBALANCE);
-        group.transitionTo(COMPLETING_REBALANCE);
+        group.initNextGeneration();
         group.transitionTo(STABLE);
 
         context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, assignments));
         context.commit();
         group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
 
-        // A new member 2 with new protocol joins the classic group, triggering the upgrade.
+        // The expected generation of the classic group in the target state.
+        int generationId = switch (state) {
+            case PREPARING_REBALANCE -> 1;
+            case COMPLETING_REBALANCE -> 2; // The generation is bumped after all members rejoin, before they sync.
+            case STABLE -> 2;
+            default -> throw new IllegalArgumentException("Unexpected state " + state);
+        };
+        // The expected group epoch of the upgraded group, before the new member joins and bumps it again.
+        int groupEpoch = switch (state) {
+            case PREPARING_REBALANCE -> 2; // Bumped by the upgrade of a rebalancing group.
+            case COMPLETING_REBALANCE -> 3; // Bumped by the new generation, then by the upgrade of a rebalancing group.
+            case STABLE -> 2;
+            default -> throw new IllegalArgumentException("Unexpected state " + state);
+        };
+
+        // Advance the group to the target state. The leader rejoins, triggering a rebalance.
+        GroupMetadataManagerTestContext.JoinResult joinResult1 = context.sendClassicGroupJoin(
+            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(memberId1)
+                .withProtocols(protocols1)
+                .withSessionTimeoutMs(5000)
+                .withRebalanceTimeoutMs(10000)
+                .build()
+        );
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+
+        GroupMetadataManagerTestContext.SyncResult syncResult2 = null;
+        if (state == COMPLETING_REBALANCE || state == STABLE) {
+            // The follower rejoins. All members have rejoined so the group transitions to COMPLETING_REBALANCE state.
+            context.sendClassicGroupJoin(
+                new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withMemberId(memberId2)
+                    .withProtocols(protocols2)
+                    .withSessionTimeoutMs(5000)
+                    .withRebalanceTimeoutMs(10000)
+                    .build()
+            );
+            assertTrue(group.isInState(COMPLETING_REBALANCE));
+            assertTrue(joinResult1.joinFuture.isDone());
+            assertEquals(Errors.NONE.code(), joinResult1.joinFuture.get().errorCode());
+            assertEquals(2, joinResult1.joinFuture.get().generationId());
+
+            // The follower syncs and waits for the leader's assignment.
+            syncResult2 = context.sendClassicGroupSync(
+                new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withMemberId(memberId2)
+                    .withGenerationId(2)
+                    .build()
+            );
+        }
+
+        if (state == STABLE) {
+            // The leader syncs with the same assignment.
+            GroupMetadataManagerTestContext.SyncResult syncResult1 = context.sendClassicGroupSync(
+                new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withMemberId(memberId1)
+                    .withGenerationId(2)
+                    .withAssignment(List.of(
+                        new SyncGroupRequestData.SyncGroupRequestAssignment()
+                            .setMemberId(memberId1)
+                            .setAssignment(assignments.get(memberId1)),
+                        new SyncGroupRequestData.SyncGroupRequestAssignment()
+                            .setMemberId(memberId2)
+                            .setAssignment(assignments.get(memberId2))
+                    ))
+                    .build()
+            );
+            syncResult1.appendFuture.complete(null);
+            assertTrue(group.isInState(STABLE));
+            assertTrue(syncResult2.syncFuture.isDone());
+            assertEquals(Errors.NONE.code(), syncResult2.syncFuture.get().errorCode());
+        }
+
+        // A new member 3 with new protocol joins the classic group, triggering the upgrade.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(memberId2)
+                .setMemberId(memberId3)
                 .setRebalanceTimeoutMs(5000)
                 .setServerAssignor("range")
                 .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
                 .setTopicPartitions(List.of()));
 
         ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
-            .setMemberEpoch(0)
-            .setPreviousMemberEpoch(0)
+            .setMemberEpoch(generationId)
+            .setPreviousMemberEpoch(generationId)
             .setClientId("client-id")
             .setClientHost("client-host")
             .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
@@ -13099,15 +13217,30 @@ public class GroupMetadataManagerTest {
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                     .setSessionTimeoutMs(5000)
-                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
             )
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0),
-                mkTopicAssignment(barTopicId, 0)), 0))
+                mkTopicAssignment(fooTopicId, 0, 1)), generationId))
             .build();
 
         ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
-            .setMemberEpoch(1)
+            .setMemberEpoch(generationId)
+            .setPreviousMemberEpoch(generationId)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
+            )
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(barTopicId, 0)), generationId))
+            .build();
+
+        ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
+            .setMemberEpoch(groupEpoch + 1)
             .setPreviousMemberEpoch(0)
             .setState(MemberState.UNRELEASED_PARTITIONS)
             .setClientId(DEFAULT_CLIENT_ID)
@@ -13118,40 +13251,82 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(Map.of())
             .build();
 
-        List<CoordinatorRecord> expectedRecords = List.of(
+        List<List<CoordinatorRecord>> expectedRecords = List.of(
             // The existing classic group tombstone.
-            GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
+            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId)),
 
-            // Create the new consumer group with member 1.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 0, computeGroupHash(Map.of(
+            // Create the new consumer group with member 1 and member 2.
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2)
+            ),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, computeGroupHash(Map.of(
                 fooTopicName, computeTopicHash(fooTopicName, metadataImage),
                 barTopicName, computeTopicHash(barTopicName, metadataImage)
-            ))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, toAssignmentWithoutEpochs(expectedMember1.assignedPartitions())),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 0, 0),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
+            )))),
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, toAssignmentWithoutEpochs(expectedMember1.assignedPartitions())),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, toAssignmentWithoutEpochs(expectedMember2.assignedPartitions()))
+            ),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, generationId, 0)),
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
+            ),
 
-            // Member 2 joins the new consumer group.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
+            // Member 3 joins the new consumer group.
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3)),
 
-            // Newly joining member 2 bumps the group epoch. A new target assignment is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, computeGroupHash(Map.of(
+            // Newly joining member 3 bumps the group epoch. A new target assignment is computed.
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch + 1, computeGroupHash(Map.of(
                 fooTopicName, computeTopicHash(fooTopicName, metadataImage),
                 barTopicName, computeTopicHash(barTopicName, metadataImage)
-            ))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, assignor.targetPartitions(memberId2)),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, assignor.targetPartitions(memberId1)),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
+            )))),
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, assignor.targetPartitions(memberId1)),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, assignor.targetPartitions(memberId3))
+            ),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, groupEpoch + 1, context.time.milliseconds())),
 
-            // Member 2 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
+            // Member 3 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3))
         );
 
-        assertRecordsEquals(expectedRecords, result.records());
+        assertUnorderedRecordsEquals(expectedRecords, result.records());
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId3)
+                .setMemberEpoch(groupEpoch + 1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+            result.response()
+        );
+
+        // The classic members with pending requests are asked to rejoin.
+        if (state == PREPARING_REBALANCE) {
+            assertTrue(joinResult1.joinFuture.isDone());
+            assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult1.joinFuture.get().errorCode());
+        }
+        if (state == COMPLETING_REBALANCE) {
+            assertTrue(syncResult2.syncFuture.isDone());
+            assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), syncResult2.syncFuture.get().errorCode());
+
+            // The leader received generation 2 in its join response. It syncs after the upgrade and is
+            // asked to rejoin.
+            assertThrows(RebalanceInProgressException.class, () -> context.sendClassicGroupSync(
+                new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withMemberId(memberId1)
+                    .withGenerationId(2)
+                    .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                    .withProtocolName("range")
+                    .build())
+            );
+        }
 
         context.assertSessionTimeout(groupId, memberId1, expectedMember1.classicProtocolSessionTimeout().get());
-        context.assertSessionTimeout(groupId, memberId2, 45000);
+        context.assertSessionTimeout(groupId, memberId2, expectedMember2.classicProtocolSessionTimeout().get());
+        context.assertSessionTimeout(groupId, memberId3, 45000);
 
         // Simulate a failed replay. The context is rolled back and the group is converted back to the classic group.
         context.rollback();
@@ -13228,8 +13403,8 @@ public class GroupMetadataManagerTest {
 
         // Member 1 keeps the partitions of its classic assignment that exist in foo.
         ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
-            .setMemberEpoch(0)
-            .setPreviousMemberEpoch(0)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
             .setClientId("client-id")
             .setClientHost("client-host")
             .setSubscribedTopicNames(List.of(fooTopicName))
@@ -13240,11 +13415,11 @@ public class GroupMetadataManagerTest {
                     .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
             )
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1)), 0))
+                mkTopicAssignment(fooTopicId, 0, 1)), 1))
             .build();
 
         ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .setState(MemberState.UNRELEASED_PARTITIONS)
             .setClientId(DEFAULT_CLIENT_ID)
@@ -13265,18 +13440,18 @@ public class GroupMetadataManagerTest {
 
             // Create the new consumer group with member 1.
             List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1)),
-            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 0, groupMetadataHash)),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, groupMetadataHash)),
             List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1)
             ))),
-            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 0, 0)),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, 0)),
             List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1)),
 
             // Member 2 joins the new consumer group.
             List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2)),
 
             // Newly joining member 2 bumps the group epoch. A new target assignment is computed.
-            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, groupMetadataHash)),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, groupMetadataHash)),
             List.of(
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(
                     mkTopicAssignment(fooTopicId, 0)
@@ -13285,7 +13460,7 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(fooTopicId, 1)
                 ))
             ),
-            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds())),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds())),
 
             // Partition 1 is still owned by member 1. Bump the member epoch of member 2 and
             // transition it to UNRELEASED_PARTITIONS.
@@ -13293,228 +13468,6 @@ public class GroupMetadataManagerTest {
         );
 
         assertUnorderedRecordsEquals(expectedRecords, result.records());
-    }
-
-    @Test
-    public void testConsumerGroupHeartbeatWithPreparingRebalanceClassicGroup() throws Exception {
-        String groupId = "group-id";
-        String memberId1 = "member-id-1";
-        String memberId2 = "member-id-2";
-        String memberId3 = "member-id-3";
-        Uuid fooTopicId = Uuid.randomUuid();
-        String fooTopicName = "foo";
-        Uuid barTopicId = Uuid.randomUuid();
-        String barTopicName = "bar";
-
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
-        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
-            memberId1, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0)
-            )),
-            memberId2, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(barTopicId, 0)
-            )),
-            memberId3, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)
-            ))
-        )));
-
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 2)
-            .addTopic(barTopicId, barTopicName, 1)
-            .addRacks()
-            .buildCoordinatorMetadataImage();
-
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
-            .build();
-
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols1 = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
-        protocols1.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName("range")
-            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                List.of(fooTopicName, barTopicName),
-                null,
-                List.of(
-                    new TopicPartition(fooTopicName, 0),
-                    new TopicPartition(fooTopicName, 1)
-                )
-            ))))
-        );
-
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols2 = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
-        protocols2.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName("range")
-            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                List.of(fooTopicName, barTopicName),
-                null,
-                List.of(new TopicPartition(barTopicName, 0))
-            ))))
-        );
-
-        Map<String, byte[]> assignments = Map.of(
-            memberId1, Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
-                new TopicPartition(fooTopicName, 0),
-                new TopicPartition(fooTopicName, 1)
-            )))),
-            memberId2, Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
-                new TopicPartition(barTopicName, 0)
-            ))))
-        );
-
-        // Construct a stable group with two members.
-        ClassicGroup group = context.createClassicGroup(groupId);
-        group.setProtocolName(Optional.of("range"));
-        group.add(
-            new ClassicGroupMember(
-                memberId1,
-                Optional.empty(),
-                "client-id",
-                "client-host",
-                10000,
-                5000,
-                "consumer",
-                protocols1,
-                assignments.get(memberId1)
-            )
-        );
-        group.add(
-            new ClassicGroupMember(
-                memberId2,
-                Optional.empty(),
-                "client-id",
-                "client-host",
-                10000,
-                5000,
-                "consumer",
-                protocols2,
-                assignments.get(memberId2)
-            )
-        );
-
-        group.transitionTo(PREPARING_REBALANCE);
-        group.transitionTo(COMPLETING_REBALANCE);
-        group.transitionTo(STABLE);
-
-        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, assignments));
-        context.commit();
-        group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
-
-        // The leader rejoins, triggering a rebalance.
-        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
-            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
-                .withGroupId("group-id")
-                .withMemberId(memberId1)
-                .withProtocols(protocols1)
-                .withSessionTimeoutMs(5000)
-                .withRebalanceTimeoutMs(10000)
-                .build()
-        );
-        assertTrue(group.isInState(PREPARING_REBALANCE));
-
-        // Another new member 3 joins with new protocol, triggering the upgrade.
-        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeatResult = context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId3)
-                .setRebalanceTimeoutMs(5000)
-                .setServerAssignor("range")
-                .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
-                .setTopicPartitions(List.of()));
-
-        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
-            .setMemberEpoch(0)
-            .setPreviousMemberEpoch(0)
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
-            .setRebalanceTimeoutMs(10000)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                    .setSessionTimeoutMs(5000)
-                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
-            )
-            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1)), 0))
-            .build();
-
-        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
-            .setMemberEpoch(0)
-            .setPreviousMemberEpoch(0)
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
-            .setRebalanceTimeoutMs(10000)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                    .setSessionTimeoutMs(5000)
-                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
-            )
-            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(barTopicId, 0)), 0))
-            .build();
-
-        ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
-            .setMemberEpoch(1)
-            .setPreviousMemberEpoch(0)
-            .setState(MemberState.UNRELEASED_PARTITIONS)
-            .setClientId(DEFAULT_CLIENT_ID)
-            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
-            .setServerAssignorName("range")
-            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
-            .setRebalanceTimeoutMs(5000)
-            .setAssignedPartitions(Map.of())
-            .build();
-
-        List<CoordinatorRecord> expectedRecords = List.of(
-            // The existing classic group tombstone.
-            GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
-
-            // Create the new consumer group with member 1 and member 2.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
-
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 0, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-                barTopicName, computeTopicHash(barTopicName, metadataImage)
-            ))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, toAssignmentWithoutEpochs(expectedMember1.assignedPartitions())),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, toAssignmentWithoutEpochs(expectedMember2.assignedPartitions())),
-
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 0, 0),
-
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2),
-
-            // Member 3 joins the new consumer group.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
-
-            // Newly joining member 3 bumps the group epoch. A new target assignment is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-                barTopicName, computeTopicHash(barTopicName, metadataImage)
-            ))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, assignor.targetPartitions(memberId1)),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, assignor.targetPartitions(memberId3)),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
-
-            // Member 3 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
-        );
-
-        assertRecordsEquals(expectedRecords, consumerGroupHeartbeatResult.records());
-        assertTrue(joinResult.joinFuture.isDone());
-        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult.joinFuture.get().errorCode());
-
-        context.assertSessionTimeout(groupId, memberId1, expectedMember1.classicProtocolSessionTimeout().get());
-        context.assertSessionTimeout(groupId, memberId2, expectedMember2.classicProtocolSessionTimeout().get());
-        context.assertSessionTimeout(groupId, memberId3, 45000);
-
-        // Simulate a failed replay. The context is rolled back and the group is converted back to the classic group.
-        context.rollback();
-        assertEquals(group, context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false));
     }
 
     /**
@@ -13705,8 +13658,22 @@ public class GroupMetadataManagerTest {
         );
     }
 
+    /**
+     * Tests the upgrade of a classic group at generation 0 when a new member joins with the consumer
+     * protocol.
+     *
+     * No generation has completed, so like a new group, the upgraded group starts with an empty target
+     * assignment at epoch 1 and no member gets epoch 0, which is reserved for joining members. The
+     * classic group is rebalancing, so the upgraded group epoch is bumped to 2 before the new member
+     * bumps it to 3. No protocol has been selected yet, so the classic members take their subscriptions
+     * from their first protocol.
+     *
+     * @see #testConsumerGroupHeartbeatWithClassicGroupAtGenerationZeroFromExistingStaticMember()
+     * @see #testConsumerGroupHeartbeatWithClassicGroupAtGenerationZeroFromNewMemberWithEmptyResolvedRegex()
+     * @see "ConsumerProtocolMigrationTest#testUpgradeFromClassicGroupAtGenerationZero()"
+     */
     @Test
-    public void testConsumerGroupHeartbeatWithPreparingRebalanceClassicGroupWithoutSelectedProtocol() throws Exception {
+    public void testConsumerGroupHeartbeatWithClassicGroupAtGenerationZero() throws Exception {
         String groupId = "group-id";
         String memberId1 = "member-id-1";
         String memberId2 = "member-id-2";
@@ -13766,6 +13733,7 @@ public class GroupMetadataManagerTest {
         group.transitionTo(PREPARING_REBALANCE);
         assertEquals(Optional.empty(), group.protocolName());
 
+        // A new member 3 with new protocol joins the classic group, triggering the upgrade.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -13777,8 +13745,8 @@ public class GroupMetadataManagerTest {
         );
 
         ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
-            .setMemberEpoch(0)
-            .setPreviousMemberEpoch(0)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
             .setClientId("client-id")
             .setClientHost("client-host")
             .setSubscribedTopicNames(List.of(fooTopicName))
@@ -13792,8 +13760,8 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
-            .setMemberEpoch(0)
-            .setPreviousMemberEpoch(0)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
             .setClientId("client-id")
             .setClientHost("client-host")
             .setSubscribedTopicNames(List.of(fooTopicName))
@@ -13807,7 +13775,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
-            .setMemberEpoch(1)
+            .setMemberEpoch(3)
             .setPreviousMemberEpoch(0)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
@@ -13823,36 +13791,37 @@ public class GroupMetadataManagerTest {
 
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 0, groupHash),
+            // The classic group is rebalancing, so the upgraded group epoch is bumped to 2.
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, groupHash),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, Map.of()),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 0, 0),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, 0),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2),
 
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3, groupHash),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 3, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
         );
 
         assertRecordsEquals(expectedRecords, result.records());
-        assertEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
-                .setMemberEpoch(1)
+                .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
             result.response()
         );
 
-        // Member 1 was converted before its classic group completed a rebalance. It rejoins with
+        // Member 2 was converted before its classic group completed a rebalance. It rejoins with
         // the classic protocol and is told its first protocol.
         GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
             new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
                 .withGroupId(groupId)
-                .withMemberId(memberId1)
+                .withMemberId(memberId2)
                 .withProtocols(protocols)
                 .withSessionTimeoutMs(5000)
                 .withRebalanceTimeoutMs(10000)
@@ -13861,8 +13830,8 @@ public class GroupMetadataManagerTest {
         joinResult.appendFuture.complete(null);
         assertEquals(
             new JoinGroupResponseData()
-                .setMemberId(memberId1)
-                .setGenerationId(1)
+                .setMemberId(memberId2)
+                .setGenerationId(3)
                 .setProtocolType("consumer")
                 .setProtocolName("range"),
             joinResult.joinFuture.get()
@@ -13980,7 +13949,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
-            .setMemberEpoch(2)
+            .setMemberEpoch(3)
             .setPreviousMemberEpoch(0)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
@@ -13996,7 +13965,7 @@ public class GroupMetadataManagerTest {
 
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, groupHash),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, assignment1),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, 0),
@@ -14004,9 +13973,9 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2),
 
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3, groupHash),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 3, context.time.milliseconds()),
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
         );
 
@@ -14014,7 +13983,7 @@ public class GroupMetadataManagerTest {
         assertEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
-                .setMemberEpoch(2)
+                .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
             result.response()
@@ -14083,56 +14052,113 @@ public class GroupMetadataManagerTest {
         assertEquals("Malformed embedded consumer protocol in subscription deserialization.", ex.getMessage());
     }
 
-    @Test
-    public void testConsumerGroupHeartbeatToClassicGroupFromExistingStaticMember() {
+    /**
+     * Tests the upgrade of a classic group at different stages of a rebalance by a static member that
+     * restarts with the consumer protocol. The classic group is advanced from Stable at generation 1 to
+     * the given state, then the static member replaces itself with the same subscription. The static
+     * member restarts with a different rebalance timeout and a server assignor, which the replacing
+     * member picks up.
+     *
+     * @param state The state of the classic group when it is upgraded.
+     * @see #testConsumerGroupHeartbeatWithClassicGroup(ClassicGroupState)
+     */
+    @ParameterizedTest
+    @EnumSource(value = ClassicGroupState.class, names = {"PREPARING_REBALANCE", "COMPLETING_REBALANCE", "STABLE"})
+    public void testConsumerGroupHeartbeatWithClassicGroupFromExistingStaticMember(ClassicGroupState state) throws Exception {
         String groupId = "group-id";
-        String memberId = "member-id";
-        String instanceId = "instance-id";
+        String memberId1 = "member-id-1";
+        String memberId2 = "member-id-2";
+        String instanceId1 = "instance-id-1";
+        String newMemberId1 = Uuid.randomUuid().toString();
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        // The new target assignment moves foo-1 from member 1 to member 2.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            newMemberId1, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0)
+            )),
+            memberId2, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1),
+                mkTopicAssignment(barTopicId, 0)
+            ))
+        )));
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 1)
+            .addTopic(fooTopicId, fooTopicName, 2)
+            .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
             .buildCoordinatorMetadataImage();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new NoOpPartitionAssignor()))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
             .withMetadataImage(metadataImage)
             .build();
 
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
-        protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName(NoOpPartitionAssignor.NAME)
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols1 = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
+        protocols1.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
             .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                List.of(fooTopicName),
+                List.of(fooTopicName, barTopicName),
                 null,
-                List.of(new TopicPartition(fooTopicName, 0))
+                List.of(
+                    new TopicPartition(fooTopicName, 0),
+                    new TopicPartition(fooTopicName, 1)
+                )
+            ))))
+        );
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols2 = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
+        protocols2.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                List.of(fooTopicName, barTopicName),
+                null,
+                List.of(new TopicPartition(barTopicName, 0))
             ))))
         );
 
         Map<String, byte[]> assignments = Map.of(
-            memberId,
-            Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
-                List.of(new TopicPartition(fooTopicName, 0))
-            )))
+            memberId1, Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
+                new TopicPartition(fooTopicName, 0),
+                new TopicPartition(fooTopicName, 1)
+            )))),
+            memberId2, Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
+                new TopicPartition(barTopicName, 0)
+            ))))
         );
 
-        // Create a stable classic group with a static member.
+        // Create a stable classic group with static leader member 1 and follower member 2.
         ClassicGroup group = context.createClassicGroup(groupId);
-        group.setProtocolName(Optional.of(NoOpPartitionAssignor.NAME));
+        group.setProtocolName(Optional.of("range"));
         group.add(
             new ClassicGroupMember(
-                memberId,
-                Optional.of(instanceId),
-                DEFAULT_CLIENT_ID,
-                DEFAULT_CLIENT_ADDRESS.toString(),
+                memberId1,
+                Optional.of(instanceId1),
+                "client-id",
+                "client-host",
                 10000,
                 5000,
                 "consumer",
-                protocols,
-                assignments.get(memberId)
+                protocols1,
+                assignments.get(memberId1)
+            )
+        );
+        group.add(
+            new ClassicGroupMember(
+                memberId2,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols2,
+                assignments.get(memberId2)
             )
         );
 
@@ -14142,27 +14168,328 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, assignments));
         context.commit();
+        group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
 
-        // The static member rejoins with new protocol after a restart, triggering the upgrade.
-        String newMemberId = Uuid.randomUuid().toString();
+        // The expected generation of the classic group in the target state.
+        int generationId = switch (state) {
+            case PREPARING_REBALANCE -> 1;
+            case COMPLETING_REBALANCE -> 2; // The generation is bumped after all members rejoin, before they sync.
+            case STABLE -> 2;
+            default -> throw new IllegalArgumentException("Unexpected state " + state);
+        };
+        // The expected group epoch of the upgraded group, before the static member replaces itself.
+        int groupEpoch = switch (state) {
+            case PREPARING_REBALANCE -> 2; // Bumped by the upgrade of a rebalancing group.
+            case COMPLETING_REBALANCE -> 3; // Bumped by the new generation, then by the upgrade of a rebalancing group.
+            case STABLE -> 2;
+            default -> throw new IllegalArgumentException("Unexpected state " + state);
+        };
+
+        // Advance the group to the target state. The leader rejoins, triggering a rebalance.
+        GroupMetadataManagerTestContext.JoinResult joinResult1 = context.sendClassicGroupJoin(
+            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withGroupInstanceId(instanceId1)
+                .withMemberId(memberId1)
+                .withProtocols(protocols1)
+                .withSessionTimeoutMs(5000)
+                .withRebalanceTimeoutMs(10000)
+                .build()
+        );
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+
+        GroupMetadataManagerTestContext.SyncResult syncResult2 = null;
+        if (state == COMPLETING_REBALANCE || state == STABLE) {
+            // The follower rejoins. All members have rejoined so the group transitions to COMPLETING_REBALANCE state.
+            context.sendClassicGroupJoin(
+                new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withMemberId(memberId2)
+                    .withProtocols(protocols2)
+                    .withSessionTimeoutMs(5000)
+                    .withRebalanceTimeoutMs(10000)
+                    .build()
+            );
+            assertTrue(group.isInState(COMPLETING_REBALANCE));
+            assertTrue(joinResult1.joinFuture.isDone());
+            assertEquals(Errors.NONE.code(), joinResult1.joinFuture.get().errorCode());
+            assertEquals(2, joinResult1.joinFuture.get().generationId());
+
+            // The follower syncs and waits for the leader's assignment.
+            syncResult2 = context.sendClassicGroupSync(
+                new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withMemberId(memberId2)
+                    .withGenerationId(2)
+                    .build()
+            );
+        }
+
+        if (state == STABLE) {
+            // The leader syncs with the same assignment.
+            GroupMetadataManagerTestContext.SyncResult syncResult1 = context.sendClassicGroupSync(
+                new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withGroupInstanceId(instanceId1)
+                    .withMemberId(memberId1)
+                    .withGenerationId(2)
+                    .withAssignment(List.of(
+                        new SyncGroupRequestData.SyncGroupRequestAssignment()
+                            .setMemberId(memberId1)
+                            .setAssignment(assignments.get(memberId1)),
+                        new SyncGroupRequestData.SyncGroupRequestAssignment()
+                            .setMemberId(memberId2)
+                            .setAssignment(assignments.get(memberId2))
+                    ))
+                    .build()
+            );
+            syncResult1.appendFuture.complete(null);
+            assertTrue(group.isInState(STABLE));
+            assertTrue(syncResult2.syncFuture.isDone());
+            assertEquals(Errors.NONE.code(), syncResult2.syncFuture.get().errorCode());
+        }
+
+        // Static member 1 restarts with the new protocol and the same subscription, triggering the upgrade.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(newMemberId)
-                .setInstanceId(instanceId)
+                .setMemberId(newMemberId1)
+                .setInstanceId(instanceId1)
+                // The rebalance timeout and server assignor differ from the classic member's, to check that the
+                // replacing member takes them from the request and not from the classic member.
                 .setRebalanceTimeoutMs(5000)
-                .setServerAssignor(NoOpPartitionAssignor.NAME)
-                .setSubscribedTopicNames(List.of(fooTopicName))
-                .setTopicPartitions(List.of()),
-            ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion()
-        );
+                .setServerAssignor("range")
+                .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
+                .setTopicPartitions(List.of()));
 
-        ConsumerGroupMember expectedClassicMember = new ConsumerGroupMember.Builder(memberId)
-            .setInstanceId(instanceId)
-            .setMemberEpoch(group.generationId())
-            .setPreviousMemberEpoch(group.generationId())
+        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
+            .setInstanceId(instanceId1)
+            .setMemberEpoch(generationId)
+            .setPreviousMemberEpoch(generationId)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
+            )
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1)), generationId))
+            .build();
+
+        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setMemberEpoch(generationId)
+            .setPreviousMemberEpoch(generationId)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
+            )
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(barTopicId, 0)), generationId))
+            .build();
+
+        ConsumerGroupMember expectedReplacingMember1 = new ConsumerGroupMember.Builder(expectedMember1, newMemberId1)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .build();
+
+        ConsumerGroupMember expectedUpdatedMember1 = new ConsumerGroupMember.Builder(expectedReplacingMember1)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(5000)
+            .setClassicMemberMetadata(null)
+            .build();
+
+        List<List<CoordinatorRecord>> expectedRecords = new ArrayList<>(List.of(
+            // The existing classic group tombstone.
+            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId)),
+
+            // Create the new consumer group with member 1 and member 2.
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2)
+            ),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, computeGroupHash(Map.of(
+                fooTopicName, computeTopicHash(fooTopicName, metadataImage),
+                barTopicName, computeTopicHash(barTopicName, metadataImage)
+            )))),
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, toAssignmentWithoutEpochs(expectedMember1.assignedPartitions())),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, toAssignmentWithoutEpochs(expectedMember2.assignedPartitions()))
+            ),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, generationId, 0)),
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
+            ),
+
+            // Remove the static member because the rejoining member replaces it.
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1)
+            ),
+
+            // Create the new static member.
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedReplacingMember1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId1, toAssignmentWithoutEpochs(expectedMember1.assignedPartitions())),
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedReplacingMember1)
+            ),
+
+            // The static member rejoins the new consumer group with the same instance id.
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedUpdatedMember1))
+        ));
+
+        if (state != STABLE) {
+            // The classic group was rebalancing, so a new target assignment is computed.
+            expectedRecords.add(List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId1, assignor.targetPartitions(newMemberId1)),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, assignor.targetPartitions(memberId2))
+            ));
+            expectedRecords.add(List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, groupEpoch, context.time.milliseconds())));
+        }
+
+        // The static member takes the assignment of the previous member. When a new target assignment is
+        // computed, foo-1 is revoked immediately because the static member does not report it as owned.
+        ConsumerGroupMember expectedFinalMember1 = new ConsumerGroupMember.Builder(expectedUpdatedMember1)
+            .setMemberEpoch(groupEpoch)
+            .setAssignedPartitions(toAssignmentWithEpochs(state == STABLE ?
+                mkAssignment(mkTopicAssignment(fooTopicId, 0, 1)) :
+                mkAssignment(mkTopicAssignment(fooTopicId, 0)), generationId))
+            .build();
+        expectedRecords.add(List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedFinalMember1)));
+
+        assertUnorderedRecordsEquals(expectedRecords, result.records());
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(newMemberId1)
+                .setMemberEpoch(groupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                        .setTopicId(fooTopicId)
+                        .setPartitions(state == STABLE ? List.of(0, 1) : List.of(0))))),
+            result.response()
+        );
+
+        // The classic members with pending requests are asked to rejoin.
+        if (state == PREPARING_REBALANCE) {
+            assertTrue(joinResult1.joinFuture.isDone());
+            assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult1.joinFuture.get().errorCode());
+        }
+        if (state == COMPLETING_REBALANCE) {
+            assertTrue(syncResult2.syncFuture.isDone());
+            assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), syncResult2.syncFuture.get().errorCode());
+        }
+
+        context.assertSessionTimeout(groupId, memberId2, expectedMember2.classicProtocolSessionTimeout().get());
+        context.assertSessionTimeout(groupId, newMemberId1, 45000);
+    }
+
+    /**
+     * Tests the upgrade of a classic group at generation 0 by a static member that restarts with the
+     * consumer protocol. The static member restarts with a different rebalance timeout and a server
+     * assignor, which the replacing member picks up.
+     *
+     * No generation has completed, so like a new group, the upgraded group starts with an empty target
+     * assignment at epoch 1 and no member gets epoch 0, which is reserved for joining members. The
+     * classic group is rebalancing, so the upgraded group epoch is bumped to 2. The static member
+     * replaces itself with the same subscription, so nothing else bumps the group epoch. No protocol
+     * has been selected yet, so the classic members take their subscriptions from their first protocol.
+     *
+     * @see #testConsumerGroupHeartbeatWithClassicGroupAtGenerationZero()
+     * @see "ConsumerProtocolMigrationTest#testUpgradeFromClassicGroupAtGenerationZeroFromExistingStaticMember()"
+     */
+    @Test
+    public void testConsumerGroupHeartbeatWithClassicGroupAtGenerationZeroFromExistingStaticMember() throws Exception {
+        String groupId = "group-id";
+        String memberId1 = "member-id-1";
+        String memberId2 = "member-id-2";
+        String instanceId1 = "instance-id-1";
+        String newMemberId1 = Uuid.randomUuid().toString();
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            newMemberId1, new MemberAssignmentImpl(Map.of()),
+            memberId2, new MemberAssignmentImpl(Map.of())
+        )));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .buildCoordinatorMetadataImage();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .build();
+
+        // The first protocol, "range", subscribes to foo.
+        JoinGroupRequestProtocolCollection protocols = GroupMetadataManagerTestContext.toProtocols("range", "cooperative-sticky");
+
+        // A classic group that has members but has not completed a generation has no selected
+        // protocol.
+        ClassicGroup group = context.createClassicGroup(groupId);
+        group.add(
+            new ClassicGroupMember(
+                memberId1,
+                Optional.of(instanceId1),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols,
+                new byte[0]
+            )
+        );
+        group.add(
+            new ClassicGroupMember(
+                memberId2,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols,
+                new byte[0]
+            )
+        );
+        group.transitionTo(PREPARING_REBALANCE);
+        assertEquals(Optional.empty(), group.protocolName());
+
+        // Static member 1 restarts with the new protocol and the same subscription, triggering the upgrade.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(newMemberId1)
+                .setInstanceId(instanceId1)
+                // The rebalance timeout and server assignor differ from the classic member's, to check that the
+                // replacing member takes them from the request and not from the classic member.
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
+                .setSubscribedTopicNames(List.of(fooTopicName))
+                .setTopicPartitions(List.of())
+        );
+
+        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
+            .setInstanceId(instanceId1)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
+            .setClientId("client-id")
+            .setClientHost("client-host")
             .setSubscribedTopicNames(List.of(fooTopicName))
             .setRebalanceTimeoutMs(10000)
             .setClassicMemberMetadata(
@@ -14170,76 +14497,645 @@ public class GroupMetadataManagerTest {
                     .setSessionTimeoutMs(5000)
                     .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
             )
-            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0)), group.generationId()))
+            .setAssignedPartitions(Map.of())
             .build();
 
-        // The memberId is generated by the consumer and should be retained
-        // for the entire lifetime of the process until termination.
-        assertEquals(
-            newMemberId,
-            result.response().memberId(),
-            "Server should not generate a new memberId since the consumer has already generated its own."
-        );
+        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
+            .setAssignedPartitions(Map.of())
+            .build();
 
-        ConsumerGroupMember expectedReplacingConsumerMember = new ConsumerGroupMember.Builder(newMemberId)
-            .setInstanceId(instanceId)
+        ConsumerGroupMember expectedReplacingMember1 = new ConsumerGroupMember.Builder(expectedMember1, newMemberId1)
             .setMemberEpoch(0)
             .setPreviousMemberEpoch(0)
-            .setState(MemberState.STABLE)
-            .setClientId(expectedClassicMember.clientId())
-            .setClientHost(expectedClassicMember.clientHost())
-            .setSubscribedTopicNames(new ArrayList<>(expectedClassicMember.subscribedTopicNames()))
-            .setRebalanceTimeoutMs(expectedClassicMember.rebalanceTimeoutMs())
-            .setAssignedPartitions(toAssignmentWithEpochs(toAssignmentWithoutEpochs(expectedClassicMember.assignedPartitions()), group.generationId()))
-            .setClassicMemberMetadata(expectedClassicMember.classicMemberMetadata().get())
             .build();
 
-        ConsumerGroupMember expectedFinalConsumerMember = new ConsumerGroupMember.Builder(expectedReplacingConsumerMember)
-            .setMemberEpoch(group.generationId())
-            .setServerAssignorName(NoOpPartitionAssignor.NAME)
+        ConsumerGroupMember expectedUpdatedMember1 = new ConsumerGroupMember.Builder(expectedReplacingMember1)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setServerAssignorName("range")
             .setRebalanceTimeoutMs(5000)
             .setClassicMemberMetadata(null)
             .build();
 
+        ConsumerGroupMember expectedFinalMember1 = new ConsumerGroupMember.Builder(expectedUpdatedMember1)
+            .setMemberEpoch(2)
+            .build();
+        long groupHash = computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+
         List<CoordinatorRecord> expectedRecords = List.of(
-            // The existing classic group tombstone.
             GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
 
-            // Create the new consumer group with the static member.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedClassicMember),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, group.generationId(), computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-            ))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, toAssignmentWithoutEpochs(expectedClassicMember.assignedPartitions())),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, group.generationId(), 0),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedClassicMember),
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
+            // The classic group is rebalancing, so the upgraded group epoch is bumped to 2.
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, 0),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2),
 
-            // Remove the static member because the rejoining member replaces it.
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId),
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
 
-            // Create the new static member.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedReplacingConsumerMember),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedReplacingConsumerMember),
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedReplacingMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId1, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedReplacingMember1),
 
-            // The static member rejoins the new consumer group with the same instance id and
-            // takes the assignment of the previous member. No new target assignment is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedFinalConsumerMember),
-
-            // The newly created static member takes the assignment from the existing member.
-            // Bump its member epoch and transition to STABLE.
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedFinalConsumerMember)
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedUpdatedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedFinalMember1)
         );
 
-        assertEquals(expectedRecords.size(), result.records().size());
-        assertRecordsEquals(expectedRecords.subList(0, 5), result.records().subList(0, 5));
-        assertRecordsEquals(expectedRecords.subList(5, 10), result.records().subList(5, 10));
+        assertRecordsEquals(expectedRecords, result.records());
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(newMemberId1)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+            result.response()
+        );
+
+        // Member 2 was converted before its classic group completed a rebalance. It rejoins with
+        // the classic protocol and is told its first protocol.
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
+            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(memberId2)
+                .withProtocols(protocols)
+                .withSessionTimeoutMs(5000)
+                .withRebalanceTimeoutMs(10000)
+                .build()
+        );
+        joinResult.appendFuture.complete(null);
+        assertEquals(
+            new JoinGroupResponseData()
+                .setMemberId(memberId2)
+                .setGenerationId(2)
+                .setProtocolType("consumer")
+                .setProtocolName("range"),
+            joinResult.joinFuture.get()
+        );
+    }
+
+    /**
+     * Tests the upgrade of a classic group at different stages of a rebalance by a new member that
+     * joins with a regex that resolves to no topics. The classic group is advanced from Stable at
+     * generation 1 to the given state, then the new member joins with the consumer protocol. Neither
+     * the join nor the resolution of the regex bumps the group epoch.
+     *
+     * @param state The state of the classic group when it is upgraded.
+     * @see #testConsumerGroupHeartbeatWithClassicGroup(ClassicGroupState)
+     */
+    @ParameterizedTest
+    @EnumSource(value = ClassicGroupState.class, names = {"PREPARING_REBALANCE", "COMPLETING_REBALANCE", "STABLE"})
+    public void testConsumerGroupHeartbeatWithClassicGroupFromNewMemberWithEmptyResolvedRegex(ClassicGroupState state) throws Exception {
+        String groupId = "group-id";
+        String memberId1 = "member-id-1";
+        String memberId2 = "member-id-2";
+        String memberId3 = "member-id-3";
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        // The new target assignment moves foo-1 from member 1 to member 2.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0)
+            )),
+            memberId2, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1),
+                mkTopicAssignment(barTopicId, 0)
+            )),
+            memberId3, new MemberAssignmentImpl(Map.of())
+        )));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 2)
+            .addTopic(barTopicId, barTopicName, 1)
+            .addRacks()
+            .buildCoordinatorMetadataImage(12345L);
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .build();
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols1 = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
+        protocols1.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                List.of(fooTopicName, barTopicName),
+                null,
+                List.of(
+                    new TopicPartition(fooTopicName, 0),
+                    new TopicPartition(fooTopicName, 1)
+                )
+            ))))
+        );
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols2 = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
+        protocols2.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                List.of(fooTopicName, barTopicName),
+                null,
+                List.of(new TopicPartition(barTopicName, 0))
+            ))))
+        );
+
+        Map<String, byte[]> assignments = Map.of(
+            memberId1, Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
+                new TopicPartition(fooTopicName, 0),
+                new TopicPartition(fooTopicName, 1)
+            )))),
+            memberId2, Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
+                new TopicPartition(barTopicName, 0)
+            ))))
+        );
+
+        // Create a stable classic group with leader member 1 and follower member 2.
+        ClassicGroup group = context.createClassicGroup(groupId);
+        group.setProtocolName(Optional.of("range"));
+        group.add(
+            new ClassicGroupMember(
+                memberId1,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols1,
+                assignments.get(memberId1)
+            )
+        );
+        group.add(
+            new ClassicGroupMember(
+                memberId2,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols2,
+                assignments.get(memberId2)
+            )
+        );
+
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        group.transitionTo(STABLE);
+
+        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, assignments));
+        context.commit();
+        group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
+
+        // The expected generation of the classic group in the target state.
+        int generationId = switch (state) {
+            case PREPARING_REBALANCE -> 1;
+            case COMPLETING_REBALANCE -> 2; // The generation is bumped after all members rejoin, before they sync.
+            case STABLE -> 2;
+            default -> throw new IllegalArgumentException("Unexpected state " + state);
+        };
+        // The expected group epoch of the upgraded group, before the new member joins.
+        int groupEpoch = switch (state) {
+            case PREPARING_REBALANCE -> 2; // Bumped by the upgrade of a rebalancing group.
+            case COMPLETING_REBALANCE -> 3; // Bumped by the new generation, then by the upgrade of a rebalancing group.
+            case STABLE -> 2;
+            default -> throw new IllegalArgumentException("Unexpected state " + state);
+        };
+
+        // Advance the group to the target state. The leader rejoins, triggering a rebalance.
+        GroupMetadataManagerTestContext.JoinResult joinResult1 = context.sendClassicGroupJoin(
+            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(memberId1)
+                .withProtocols(protocols1)
+                .withSessionTimeoutMs(5000)
+                .withRebalanceTimeoutMs(10000)
+                .build()
+        );
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+
+        GroupMetadataManagerTestContext.SyncResult syncResult2 = null;
+        if (state == COMPLETING_REBALANCE || state == STABLE) {
+            // The follower rejoins. All members have rejoined so the group transitions to COMPLETING_REBALANCE state.
+            context.sendClassicGroupJoin(
+                new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withMemberId(memberId2)
+                    .withProtocols(protocols2)
+                    .withSessionTimeoutMs(5000)
+                    .withRebalanceTimeoutMs(10000)
+                    .build()
+            );
+            assertTrue(group.isInState(COMPLETING_REBALANCE));
+            assertTrue(joinResult1.joinFuture.isDone());
+            assertEquals(Errors.NONE.code(), joinResult1.joinFuture.get().errorCode());
+            assertEquals(2, joinResult1.joinFuture.get().generationId());
+
+            // The follower syncs and waits for the leader's assignment.
+            syncResult2 = context.sendClassicGroupSync(
+                new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withMemberId(memberId2)
+                    .withGenerationId(2)
+                    .build()
+            );
+        }
+
+        if (state == STABLE) {
+            // The leader syncs with the same assignment.
+            GroupMetadataManagerTestContext.SyncResult syncResult1 = context.sendClassicGroupSync(
+                new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withMemberId(memberId1)
+                    .withGenerationId(2)
+                    .withAssignment(List.of(
+                        new SyncGroupRequestData.SyncGroupRequestAssignment()
+                            .setMemberId(memberId1)
+                            .setAssignment(assignments.get(memberId1)),
+                        new SyncGroupRequestData.SyncGroupRequestAssignment()
+                            .setMemberId(memberId2)
+                            .setAssignment(assignments.get(memberId2))
+                    ))
+                    .build()
+            );
+            syncResult1.appendFuture.complete(null);
+            assertTrue(group.isInState(STABLE));
+            assertTrue(syncResult2.syncFuture.isDone());
+            assertEquals(Errors.NONE.code(), syncResult2.syncFuture.get().errorCode());
+        }
+
+        // A new member 3 with new protocol joins the classic group with a regex that resolves to no topics,
+        // triggering the upgrade.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId3)
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
+                .setSubscribedTopicRegex("baz")
+                .setTopicPartitions(List.of()));
+
+        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
+            .setMemberEpoch(generationId)
+            .setPreviousMemberEpoch(generationId)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
+            )
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1)), generationId))
+            .build();
+
+        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setMemberEpoch(generationId)
+            .setPreviousMemberEpoch(generationId)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
+            )
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(barTopicId, 0)), generationId))
+            .build();
+
+        ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
+            .setMemberEpoch(groupEpoch)
+            .setPreviousMemberEpoch(0)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setServerAssignorName("range")
+            .setSubscribedTopicRegex("baz")
+            .setRebalanceTimeoutMs(5000)
+            .setAssignedPartitions(Map.of())
+            .build();
+
+        List<List<CoordinatorRecord>> expectedRecords = new ArrayList<>(List.of(
+            // The existing classic group tombstone.
+            List.of(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId)),
+
+            // Create the new consumer group with member 1 and member 2.
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2)
+            ),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, computeGroupHash(Map.of(
+                fooTopicName, computeTopicHash(fooTopicName, metadataImage),
+                barTopicName, computeTopicHash(barTopicName, metadataImage)
+            )))),
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, toAssignmentWithoutEpochs(expectedMember1.assignedPartitions())),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, toAssignmentWithoutEpochs(expectedMember2.assignedPartitions()))
+            ),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, generationId, 0)),
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
+            ),
+
+            // Member 3 joins the new consumer group. Its regex is not resolved yet, so it does not bump
+            // the group epoch.
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3))
+        ));
+
+        if (state != STABLE) {
+            // The classic group was rebalancing, so a new target assignment is computed.
+            expectedRecords.add(List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, assignor.targetPartitions(memberId1)),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, assignor.targetPartitions(memberId2)),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, assignor.targetPartitions(memberId3))
+            ));
+            expectedRecords.add(List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, groupEpoch, context.time.milliseconds())));
+        }
+
+        // Member 3 has no assigned partitions.
+        expectedRecords.add(List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)));
+
+        assertUnorderedRecordsEquals(expectedRecords, result.records());
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId3)
+                .setMemberEpoch(groupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+            result.response()
+        );
+
+        // The regex resolves to no topics, so the group epoch is not bumped again.
+        List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> tasks = context.processTasks();
+        assertEquals(1, tasks.size());
+
+        MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> task = tasks.get(0);
+        assertEquals(groupId + "-regex", task.key());
+        assertRecordsEquals(
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+                    groupId,
+                    "baz",
+                    new ResolvedRegularExpression(
+                        Set.of(),
+                        12345L,
+                        context.time.milliseconds()
+                    )
+                )
+            ),
+            task.result().records()
+        );
+
+        // The classic members with pending requests are asked to rejoin.
+        if (state == PREPARING_REBALANCE) {
+            assertTrue(joinResult1.joinFuture.isDone());
+            assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult1.joinFuture.get().errorCode());
+        }
+        if (state == COMPLETING_REBALANCE) {
+            assertTrue(syncResult2.syncFuture.isDone());
+            assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), syncResult2.syncFuture.get().errorCode());
+
+            // The leader received generation 2 in its join response. It syncs after the upgrade and is
+            // asked to rejoin.
+            assertThrows(RebalanceInProgressException.class, () -> context.sendClassicGroupSync(
+                new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                    .withGroupId(groupId)
+                    .withMemberId(memberId1)
+                    .withGenerationId(2)
+                    .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                    .withProtocolName("range")
+                    .build())
+            );
+        }
+
+        context.assertSessionTimeout(groupId, memberId1, expectedMember1.classicProtocolSessionTimeout().get());
+        context.assertSessionTimeout(groupId, memberId2, expectedMember2.classicProtocolSessionTimeout().get());
+        context.assertSessionTimeout(groupId, memberId3, 45000);
+    }
+
+    /**
+     * Tests the upgrade of a classic group at generation 0 by a new member that joins with a regex
+     * that resolves to no topics.
+     *
+     * No generation has completed, so like a new group, the upgraded group starts with an empty target
+     * assignment at epoch 1 and no member gets epoch 0, which is reserved for joining members. The
+     * classic group is rebalancing, so the upgraded group epoch is bumped to 2. Neither the join nor
+     * the resolution of the regex bumps the group epoch. No protocol has been selected yet, so the
+     * classic members take their subscriptions from their first protocol.
+     *
+     * @see #testConsumerGroupHeartbeatWithClassicGroupAtGenerationZero()
+     * @see "ConsumerProtocolMigrationTest#testUpgradeFromClassicGroupAtGenerationZeroFromNewMemberWithEmptyResolvedRegex()"
+     */
+    @Test
+    public void testConsumerGroupHeartbeatWithClassicGroupAtGenerationZeroFromNewMemberWithEmptyResolvedRegex() throws Exception {
+        String groupId = "group-id";
+        String memberId1 = "member-id-1";
+        String memberId2 = "member-id-2";
+        String memberId3 = "member-id-3";
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(Map.of()),
+            memberId2, new MemberAssignmentImpl(Map.of()),
+            memberId3, new MemberAssignmentImpl(Map.of())
+        )));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .buildCoordinatorMetadataImage(12345L);
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .build();
+
+        // The first protocol, "range", subscribes to foo.
+        JoinGroupRequestProtocolCollection protocols = GroupMetadataManagerTestContext.toProtocols("range", "cooperative-sticky");
+
+        // A classic group that has members but has not completed a generation has no selected
+        // protocol.
+        ClassicGroup group = context.createClassicGroup(groupId);
+        group.add(
+            new ClassicGroupMember(
+                memberId1,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols,
+                new byte[0]
+            )
+        );
+        group.add(
+            new ClassicGroupMember(
+                memberId2,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols,
+                new byte[0]
+            )
+        );
+        group.transitionTo(PREPARING_REBALANCE);
+        assertEquals(Optional.empty(), group.protocolName());
+
+        // A new member 3 with new protocol joins the classic group with a regex that resolves to no topics,
+        // triggering the upgrade.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId3)
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
+                .setSubscribedTopicRegex("baz")
+                .setTopicPartitions(List.of())
+        );
+
+        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
+            .setAssignedPartitions(Map.of())
+            .build();
+
+        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
+            .setAssignedPartitions(Map.of())
+            .build();
+
+        ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
+            .setMemberEpoch(2)
+            .setPreviousMemberEpoch(0)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setServerAssignorName("range")
+            .setSubscribedTopicRegex("baz")
+            .setRebalanceTimeoutMs(5000)
+            .setAssignedPartitions(Map.of())
+            .build();
+        long groupHash = computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
+
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
+            // The classic group is rebalancing, so the upgraded group epoch is bumped to 2.
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, 0),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2),
+
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
+        );
 
         assertRecordsEquals(expectedRecords, result.records());
-        context.assertSessionTimeout(groupId, newMemberId, 45000);
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId3)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+            result.response()
+        );
+
+        // The regex resolves to no topics, so the group epoch is not bumped again.
+        List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> tasks = context.processTasks();
+        assertEquals(1, tasks.size());
+
+        MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> task = tasks.get(0);
+        assertEquals(groupId + "-regex", task.key());
+        assertRecordsEquals(
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+                    groupId,
+                    "baz",
+                    new ResolvedRegularExpression(
+                        Set.of(),
+                        12345L,
+                        context.time.milliseconds()
+                    )
+                )
+            ),
+            task.result().records()
+        );
+
+        // Member 2 was converted before its classic group completed a rebalance. It rejoins with
+        // the classic protocol and is told its first protocol.
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
+            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(memberId2)
+                .withProtocols(protocols)
+                .withSessionTimeoutMs(5000)
+                .withRebalanceTimeoutMs(10000)
+                .build()
+        );
+        joinResult.appendFuture.complete(null);
+        assertEquals(
+            new JoinGroupResponseData()
+                .setMemberId(memberId2)
+                .setGenerationId(2)
+                .setProtocolType("consumer")
+                .setProtocolName("range"),
+            joinResult.joinFuture.get()
+        );
     }
 
     @Test
@@ -14316,7 +15212,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
-            .setMemberEpoch(2)
+            .setMemberEpoch(3)
             .setPreviousMemberEpoch(0)
             .setState(MemberState.STABLE)
             .setClientId(DEFAULT_CLIENT_ID)
@@ -14333,7 +15229,7 @@ public class GroupMetadataManagerTest {
 
             // Create the new consumer group with member 1.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, computeGroupHash(Map.of(
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
                 fooTopicName, computeTopicHash(fooTopicName, metadataImage),
                 barTopicName, computeTopicHash(barTopicName, metadataImage)
             ))),
@@ -14345,12 +15241,12 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
 
             // Newly joining member 2 bumps the group epoch. A new target assignment is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3, computeGroupHash(Map.of(
                 fooTopicName, computeTopicHash(fooTopicName, metadataImage),
                 barTopicName, computeTopicHash(barTopicName, metadataImage)
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 3, context.time.milliseconds()),
 
             // Member 2 has no pending revoking partition or pending release partition.
             // Bump its member epoch and transition to STABLE.
@@ -14518,246 +15414,6 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId1, 45000);
     }
 
-    @Test
-    public void testConsumerGroupHeartbeatWithCompletingRebalanceClassicGroup() throws Exception {
-        String groupId = "group-id";
-        String memberId1 = "member-id-1";
-        String memberId2 = "member-id-2";
-        String memberId3 = "member-id-3";
-        Uuid fooTopicId = Uuid.randomUuid();
-        String fooTopicName = "foo";
-        Uuid barTopicId = Uuid.randomUuid();
-        String barTopicName = "bar";
-
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
-        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
-            memberId1, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0)
-            )),
-            memberId2, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(barTopicId, 0)
-            )),
-            memberId3, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)
-            ))
-        )));
-
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 2)
-            .addTopic(barTopicId, barTopicName, 1)
-            .addRacks()
-            .buildCoordinatorMetadataImage();
-
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
-            .build();
-
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols1 = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
-        protocols1.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName("range")
-            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                List.of(fooTopicName, barTopicName),
-                null,
-                List.of(
-                    new TopicPartition(fooTopicName, 0),
-                    new TopicPartition(fooTopicName, 1)
-                )
-            ))))
-        );
-
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols2 = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
-        protocols2.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName("range")
-            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                List.of(fooTopicName, barTopicName),
-                null,
-                List.of(new TopicPartition(barTopicName, 0))
-            ))))
-        );
-
-        Map<String, byte[]> assignments = Map.of(
-            memberId1, Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
-                new TopicPartition(fooTopicName, 0),
-                new TopicPartition(fooTopicName, 1)
-            )))),
-            memberId2, Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
-                new TopicPartition(barTopicName, 0)
-            ))))
-        );
-
-        // Construct a stable group with two members.
-        ClassicGroup group = context.createClassicGroup(groupId);
-        group.setProtocolName(Optional.of("range"));
-        group.add(
-            new ClassicGroupMember(
-                memberId1,
-                Optional.empty(),
-                "client-id",
-                "client-host",
-                10000,
-                5000,
-                "consumer",
-                protocols1,
-                assignments.get(memberId1)
-            )
-        );
-        group.add(
-            new ClassicGroupMember(
-                memberId2,
-                Optional.empty(),
-                "client-id",
-                "client-host",
-                10000,
-                5000,
-                "consumer",
-                protocols2,
-                assignments.get(memberId2)
-            )
-        );
-
-        group.transitionTo(PREPARING_REBALANCE);
-        group.transitionTo(COMPLETING_REBALANCE);
-        group.transitionTo(STABLE);
-
-        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, assignments));
-        context.commit();
-        group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
-
-        // The leader rejoins, triggering a rebalance.
-        context.sendClassicGroupJoin(
-            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
-                .withGroupId("group-id")
-                .withMemberId(memberId1)
-                .withProtocols(protocols1)
-                .withSessionTimeoutMs(5000)
-                .withRebalanceTimeoutMs(10000)
-                .build()
-        );
-
-        // The follower rejoins. All members have rejoined so the group transitions to COMPLETING_REBALANCE state.
-        context.sendClassicGroupJoin(
-            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
-                .withGroupId("group-id")
-                .withMemberId(memberId2)
-                .withProtocols(protocols2)
-                .withSessionTimeoutMs(5000)
-                .withRebalanceTimeoutMs(10000)
-                .build()
-        );
-        assertTrue(group.isInState(COMPLETING_REBALANCE));
-
-        GroupMetadataManagerTestContext.SyncResult syncResult = context.sendClassicGroupSync(
-            new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
-                .withGroupId("group-id")
-                .withMemberId(memberId2)
-                .withGenerationId(1)
-                .build());
-
-        // Another new member 3 joins with new protocol, triggering the upgrade.
-        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeatResult = context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId3)
-                .setRebalanceTimeoutMs(5000)
-                .setServerAssignor("range")
-                .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
-                .setTopicPartitions(List.of()));
-
-        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
-            .setMemberEpoch(1)
-            .setPreviousMemberEpoch(1)
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
-            .setRebalanceTimeoutMs(10000)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                    .setSessionTimeoutMs(5000)
-                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
-            )
-            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1)), 1))
-            .build();
-
-        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
-            .setMemberEpoch(1)
-            .setPreviousMemberEpoch(1)
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
-            .setRebalanceTimeoutMs(10000)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                    .setSessionTimeoutMs(5000)
-                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
-            )
-            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(barTopicId, 0)), 1))
-            .build();
-
-        ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(0)
-            .setState(MemberState.UNRELEASED_PARTITIONS)
-            .setClientId(DEFAULT_CLIENT_ID)
-            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
-            .setServerAssignorName("range")
-            .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
-            .setRebalanceTimeoutMs(5000)
-            .setAssignedPartitions(Map.of())
-            .build();
-
-        List<CoordinatorRecord> expectedRecords = List.of(
-            // The existing classic group tombstone.
-            GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
-
-            // Create the new consumer group with member 1 and member 2.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
-
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-                barTopicName, computeTopicHash(barTopicName, metadataImage)
-            ))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, toAssignmentWithoutEpochs(expectedMember1.assignedPartitions())),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, toAssignmentWithoutEpochs(expectedMember2.assignedPartitions())),
-
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, 0),
-
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2),
-
-            // Member 3 joins the new consumer group.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
-
-            // Newly joining member 3 bumps the group epoch. A new target assignment is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-                barTopicName, computeTopicHash(barTopicName, metadataImage)
-            ))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, assignor.targetPartitions(memberId1)),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, assignor.targetPartitions(memberId3)),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
-
-            // Member 3 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
-        );
-
-        assertRecordsEquals(expectedRecords, consumerGroupHeartbeatResult.records());
-        assertTrue(syncResult.syncFuture.isDone());
-        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), syncResult.syncFuture.get().errorCode());
-
-        context.assertSessionTimeout(groupId, memberId1, expectedMember1.classicProtocolSessionTimeout().get());
-        context.assertSessionTimeout(groupId, memberId2, expectedMember2.classicProtocolSessionTimeout().get());
-        context.assertSessionTimeout(groupId, memberId3, 45000);
-
-        // Simulate a failed replay. The context is rolled back and the group is converted back to the classic group.
-        context.rollback();
-        assertEquals(group, context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false));
-    }
-
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testConsumerGroupHeartbeatWithClassicGroupRebalancingFromCompletingRebalance(boolean joinPhaseCompleted) {
@@ -14846,6 +15502,9 @@ public class GroupMetadataManagerTest {
         assertEquals(joinPhaseCompleted ? COMPLETING_REBALANCE : PREPARING_REBALANCE, group.currentState());
         assertEquals(generationId, group.generationId());
 
+        // The expected group epoch of the upgraded group, before the new member joins and bumps it again.
+        int groupEpoch = generationId + 1; // Bumped by the upgrade of a rebalancing group.
+
         // Member 3 joins with the consumer protocol, triggering the upgrade.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
@@ -14877,7 +15536,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
-            .setMemberEpoch(generationId + 1)
+            .setMemberEpoch(groupEpoch + 1)
             .setPreviousMemberEpoch(0)
             .setState(MemberState.UNRELEASED_PARTITIONS)
             .setClientId(DEFAULT_CLIENT_ID)
@@ -14898,7 +15557,7 @@ public class GroupMetadataManagerTest {
             // of their assignment of generation 1.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, generationId, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, groupHash),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(mkTopicAssignment(fooTopicId, 0, 2))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, mkAssignment(mkTopicAssignment(fooTopicId, 1, 3))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, generationId, 0),
@@ -14909,10 +15568,10 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
 
             // Newly joining member 3 bumps the group epoch. A new target assignment is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, generationId + 1, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch + 1, groupHash),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, mkAssignment(mkTopicAssignment(fooTopicId, 1))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, mkAssignment(mkTopicAssignment(fooTopicId, 3))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, generationId + 1, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, groupEpoch + 1, context.time.milliseconds()),
 
             // Member 3 does not get foo-3 until member 2 revokes it.
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
@@ -14922,7 +15581,7 @@ public class GroupMetadataManagerTest {
         assertEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
-                .setMemberEpoch(generationId + 1)
+                .setMemberEpoch(groupEpoch + 1)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
             result.response()

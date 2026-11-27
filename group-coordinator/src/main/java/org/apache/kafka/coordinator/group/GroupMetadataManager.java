@@ -1440,8 +1440,6 @@ public class GroupMetadataManager {
      * @return The created ConsumerGroup.
      */
     ConsumerGroup convertToConsumerGroup(ClassicGroup classicGroup, List<CoordinatorRecord> records) {
-        // The upgrade is always triggered by a new member joining the classic group, which always results in
-        // updatedMember.subscribedTopicNames changing, the group epoch being bumped, and triggering a new rebalance.
         // If the ClassicGroup is rebalancing, inform the awaiting consumers of another ongoing rebalance
         // so that they will rejoin for the new rebalance.
         classicGroup.completeAllJoinFutures(Errors.REBALANCE_IN_PROGRESS);
