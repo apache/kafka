@@ -17119,6 +17119,9 @@ public class GroupMetadataManagerTest {
         assertEquals(joinPhaseCompleted ? COMPLETING_REBALANCE : PREPARING_REBALANCE, group.currentState());
         assertEquals(generationId, group.generationId());
 
+        // The expected group epoch of the upgraded group, before the new member joins and bumps it again.
+        int groupEpoch = generationId + 1; // Bumped by the upgrade of a rebalancing group.
+
         // Member 3 joins with the consumer protocol, triggering the upgrade.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
@@ -17150,7 +17153,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
-            .setMemberEpoch(generationId + 1)
+            .setMemberEpoch(groupEpoch + 1)
             .setPreviousMemberEpoch(0)
             .setState(MemberState.UNRELEASED_PARTITIONS)
             .setClientId(DEFAULT_CLIENT_ID)
@@ -17171,7 +17174,7 @@ public class GroupMetadataManagerTest {
             // of their assignment of generation 1.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, generationId, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, groupHash),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(mkTopicAssignment(fooTopicId, 0, 2))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, mkAssignment(mkTopicAssignment(fooTopicId, 1, 3))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, generationId, 0),
@@ -17182,10 +17185,10 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
 
             // Newly joining member 3 bumps the group epoch. A new target assignment is computed.
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, generationId + 1, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch + 1, groupHash),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, mkAssignment(mkTopicAssignment(fooTopicId, 1))),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, mkAssignment(mkTopicAssignment(fooTopicId, 3))),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, generationId + 1, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, groupEpoch + 1, context.time.milliseconds()),
 
             // Member 3 does not get foo-3 until member 2 revokes it.
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
@@ -17195,7 +17198,7 @@ public class GroupMetadataManagerTest {
         assertEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
-                .setMemberEpoch(generationId + 1)
+                .setMemberEpoch(groupEpoch + 1)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
             result.response()
