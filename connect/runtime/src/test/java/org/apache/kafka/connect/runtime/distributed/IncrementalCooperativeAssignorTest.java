@@ -436,6 +436,36 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     @Test
+    public void testTaskAssignmentWhenWorkersRejoinWithNewMemberIdAfterReset() {
+        // Customize assignor for this test case
+        time = new MockTime();
+        initAssignor();
+
+        // First assignment with 2 workers and 2 connectors configured but not yet assigned
+        addNewEmptyWorkers("worker2");
+        performStandardRebalance();
+        assertDelay(0);
+        assertWorkers("worker1", "worker2");
+        assertConnectorAllocations(1, 1);
+        assertTaskAllocations(4, 4);
+        assertBalancedAndCompleteAllocation();
+
+        // The broker coordinator becomes unreachable, so both workers revoke their assignments
+        // and the assignor is reset. The second worker then rejoins with a new member ID
+        assignor.reset();
+        removeWorkers("worker1", "worker2");
+        addNewEmptyWorkers("worker1", "worker3");
+
+        // Second assignment. Nothing is treated as lost, so everything is reassigned without a delay
+        performStandardRebalance();
+        assertDelay(0);
+        assertWorkers("worker1", "worker3");
+        assertConnectorAllocations(1, 1);
+        assertTaskAllocations(4, 4);
+        assertBalancedAndCompleteAllocation();
+    }
+
+    @Test
     public void testTaskAssignmentWhenLeaderLeavesPermanently() {
         // First assignment with 3 workers and 2 connectors configured but not yet assigned
         addNewEmptyWorkers("worker2", "worker3");
