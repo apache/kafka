@@ -1626,9 +1626,13 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertEquals(groupEpoch, result.response().data().memberEpoch());
         assertEquals(
             oldTargetAssignment.activeTasks(),
-            streamsGroup.refinedAssignment(groupEpoch).get(rejoinMemberId).activeTasks()
+            streamsGroup.refinedAssignment(groupEpoch, streamsGroup.targetAssignment())
+                .get(rejoinMemberId)
+                .activeTasks()
         );
-        assertFalse(streamsGroup.refinedAssignment(groupEpoch).containsKey(oldMemberId));
+        assertFalse(
+            streamsGroup.refinedAssignment(groupEpoch, streamsGroup.targetAssignment()).containsKey(oldMemberId)
+        );
     }
 
     @Test
@@ -1688,7 +1692,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             staticJoinHeartbeat(groupId, memberId1, instanceId2, topic)
         ));
 
-        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(groupEpoch));
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(groupEpoch, streamsGroup.targetAssignment()));
     }
 
     @Test
@@ -1745,7 +1749,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             staticHeartbeat(groupId, memberId1, instanceId2, groupEpoch)
         ));
 
-        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(groupEpoch));
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(groupEpoch, streamsGroup.targetAssignment()));
     }
 
     @Test
@@ -2691,7 +2695,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 memberB, mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(SUBTOPOLOGY_1, 0, 1, 2)),
                 memberS, mkTasksTuple(TaskRole.WARMUP, TaskAssignmentTestUtil.mkTasks(SUBTOPOLOGY_1, 2))
             ),
-            group.refinedAssignment(11)
+            group.refinedAssignment(11, group.targetAssignment())
         );
 
         // The warm-up task catches up while the group is still RECONCILING, so no refinement step is derived yet.

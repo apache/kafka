@@ -2361,13 +2361,15 @@ public class GroupMetadataManager {
         }
 
         Map<String, TasksTuple> refinedGroupAssignment = null;
+        Map<String, TasksTuple> targetAssignment = null;
         if (assignmentUpdate == AssignmentUpdate.NONE && group.state() == StreamsGroup.StreamsGroupState.STABLE) {
             // We are not computing a new target assignment later, thus we try to refine the current target assignment
             // into an intermediate assignment (with warm-up tasks) the member should be reconciled towards.
             // No active task needs to stay with its holder: if the intermediate assignment differs from the assigned
             // tasks, it starts a new epoch that every member reconciles to, and otherwise it moves nothing.
-            refinedGroupAssignment = refineAssignment(group, group.targetAssignment(), updatedConfiguredTopology, false);
-            if (differsFromAssignedTasks(refinedGroupAssignment, group)) {
+            targetAssignment = group.targetAssignment();
+            refinedGroupAssignment = refineAssignment(group, targetAssignment, updatedConfiguredTopology, false);
+            if (differsFromAssignedTasks(refinedGroupAssignment, targetAssignment, group)) {
                 assignmentUpdate = AssignmentUpdate.REFINED;
             }
         }
@@ -2433,7 +2435,12 @@ public class GroupMetadataManager {
                 updatedConfiguredTopology
             );
         } else {
-            maybeCacheRefinedAssignment(group, updateTargetAssignmentResult.targetAssignmentEpoch(), refinedGroupAssignment);
+            maybeCacheRefinedAssignment(
+                group,
+                updateTargetAssignmentResult.targetAssignmentEpoch(),
+                refinedGroupAssignment,
+                targetAssignment
+            );
         }
         TasksTuple refinedAssignment = refinedGroupAssignment.getOrDefault(memberId, TasksTuple.EMPTY);
 
@@ -4934,6 +4941,24 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Whether the member is a static member that replaces another member of the group with the same instance ID, which
+     * relabels the replaced member's target assignment to the member.
+     *
+     * @param group  The streams group.
+     * @param member The member.
+     *
+     * @return True if the member replaces another static member.
+     */
+    private static boolean replacesStaticMember(StreamsGroup group, StreamsGroupMember member) {
+        String instanceId = member.instanceId().orElse(null);
+        if (instanceId == null) {
+            return false;
+        }
+        String previousMemberId = group.staticMemberId(instanceId);
+        return previousMemberId != null && !previousMemberId.equals(member.memberId());
+    }
+
+    /**
      * Updates the target assignment according to the updated member and metadata image.
      * When the assignor is offloaded, this method only schedules the assignor run and returns
      * the last target assignment. The new target assignment is installed later by
@@ -4970,6 +4995,13 @@ public class GroupMetadataManager {
             ));
 
             return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), Map.of());
+        }
+
+        if (group.assignmentEpoch() >= groupEpoch
+            && updatedMember.map(member -> !replacesStaticMember(group, member)).orElse(true)) {
+            // The assignment is up to date, and only a static member replacing another changes the target assignment
+            // within an assignment epoch, so the group's target assignment is current.
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), group.targetAssignment());
         }
 
         // Apply the unwritten membership change (e.g. the relabelling of a replacing static member) to the
@@ -5268,14 +5300,21 @@ public class GroupMetadataManager {
      * {@code -2}, which keeps the group out of {@code STABLE}.
      *
      * @param refinedAssignment The intermediate assignment keyed by member ID.
+     * @param targetAssignment  All members' target assignments, which the intermediate assignment was refined from.
      * @param group             The streams group.
      *
      * @return True if a member's intermediate assignment differs from its assigned tasks.
      */
     private static boolean differsFromAssignedTasks(
         final Map<String, TasksTuple> refinedAssignment,
+        final Map<String, TasksTuple> targetAssignment,
         final StreamsGroup group
     ) {
+        if (refinedAssignment == targetAssignment) {
+            // The group counts the members whose assigned tasks are their target assignment, so no member has to be
+            // compared.
+            return !group.allMembersOnTargetAssignment();
+        }
         for (final StreamsGroupMember member : group.members().values()) {
             if (!refinedAssignment.getOrDefault(member.memberId(), TasksTuple.EMPTY).sameTasks(member.assignedTasks())) {
                 return true;
@@ -5302,7 +5341,7 @@ public class GroupMetadataManager {
         final Map<String, TasksTuple> targetAssignment,
         final ConfiguredTopology configuredTopology
     ) {
-        final Map<String, TasksTuple> cached = group.refinedAssignment(assignmentEpoch);
+        final Map<String, TasksTuple> cached = group.refinedAssignment(assignmentEpoch, targetAssignment);
         if (cached != null) {
             return cached;
         }
@@ -5312,7 +5351,7 @@ public class GroupMetadataManager {
         // move to another member before then, so every active task stays with the member that holds it.
         final Map<String, TasksTuple> refinedAssignment = refineAssignment(
             group, targetAssignment, configuredTopology, group.isAssignmentEpochFromBeforeLoad(assignmentEpoch));
-        maybeCacheRefinedAssignment(group, assignmentEpoch, refinedAssignment);
+        maybeCacheRefinedAssignment(group, assignmentEpoch, refinedAssignment, targetAssignment);
         return refinedAssignment;
     }
 
@@ -5321,19 +5360,26 @@ public class GroupMetadataManager {
      * refinement step do not change while the members reconcile toward it.
      * <p>
      * Nothing is kept for a group that has warm-up tasks disabled: the intermediate assignment is then just the target
-     * assignment, which the caller has anyway, so there is nothing to freeze.
+     * assignment, which the caller has anyway, so there is nothing to freeze. An intermediate assignment that is the
+     * target assignment itself is kept without copying it.
      *
      * @param group              The streams group.
      * @param assignmentEpoch    The assignment epoch the intermediate assignment was derived for.
      * @param refinedAssignment  The intermediate assignment keyed by member ID.
+     * @param targetAssignment   All members' target assignments, which the intermediate assignment was refined from.
      */
     private void maybeCacheRefinedAssignment(
         final StreamsGroup group,
         final int assignmentEpoch,
-        final Map<String, TasksTuple> refinedAssignment
+        final Map<String, TasksTuple> refinedAssignment,
+        final Map<String, TasksTuple> targetAssignment
     ) {
         if (streamsGroupNumWarmupReplicas(group.groupId()) > 0) {
-            group.setRefinedAssignment(assignmentEpoch, refinedAssignment);
+            if (refinedAssignment == targetAssignment) {
+                group.setRefinedAssignmentToTargetAssignment(assignmentEpoch);
+            } else {
+                group.setRefinedAssignment(assignmentEpoch, refinedAssignment);
+            }
         }
     }
 
