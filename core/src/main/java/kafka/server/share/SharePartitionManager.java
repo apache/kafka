@@ -409,16 +409,51 @@ public class SharePartitionManager implements AutoCloseable {
         String groupId,
         String memberId
     ) {
+        return releaseSession(groupId, memberId, Optional.empty());
+    }
+
+    /**
+     * The release session method is used to release the session for the memberId of respective group,
+     * if the session was created by the given client connection.
+     *
+     * @param groupId The group id, this is used to identify the share group.
+     * @param memberId The member id is used to identify the client.
+     * @param clientConnectionId The client connection id.
+     *
+     * @return A future that will be completed with the release response.
+     */
+    public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseSession(
+        String groupId,
+        String memberId,
+        String clientConnectionId
+    ) {
+        return releaseSession(groupId, memberId, Optional.of(clientConnectionId));
+    }
+
+    private CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseSession(
+        String groupId,
+        String memberId,
+        Optional<String> clientConnectionId
+    ) {
         log.trace("Release session request for groupId: {}, memberId: {}", groupId, memberId);
-        List<TopicIdPartition> topicIdPartitions = cachedTopicIdPartitionsInShareSession(
-            groupId, memberId);
-        // Remove the share session from the cache.
         ShareSessionKey key = shareSessionKey(groupId, memberId);
-        if (cache.remove(key) == null) {
-            log.error("Share session error for {}: no such share session found", key);
-            return CompletableFuture.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
-        } else {
-            log.debug("Removed share session with key {}", key);
+        List<TopicIdPartition> topicIdPartitions;
+        synchronized (cache) {
+            if (clientConnectionId.isPresent()) {
+                ShareSession shareSession = cache.get(key);
+                if (shareSession == null || !shareSession.connectionId().equals(clientConnectionId.get())) {
+                    log.error("Share session error for {}: no such share session found", key);
+                    return CompletableFuture.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
+                }
+            }
+            topicIdPartitions = cachedTopicIdPartitionsInShareSession(groupId, memberId);
+            // Remove the share session from the cache.
+            if (cache.remove(key) == null) {
+                log.error("Share session error for {}: no such share session found", key);
+                return CompletableFuture.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
+            } else {
+                log.debug("Removed share session with key {}", key);
+            }
         }
 
         // Additionally release the acquired records for the respective member.
@@ -516,13 +551,15 @@ public class SharePartitionManager implements AutoCloseable {
         Boolean isAcknowledgeDataPresent,
         String clientConnectionId
     ) {
+        maybeThrowIfConnectionUsedByAnotherSession(groupId, memberId, clientConnectionId);
         ShareFetchContext context;
         // If the request's epoch is FINAL_EPOCH or INITIAL_EPOCH, we should remove the existing sessions. Also, start a
         // new session in case it is INITIAL_EPOCH. Hence, we need to treat them as special cases.
         if (isFull(shareSessionEpoch)) {
             ShareSessionKey key = shareSessionKey(groupId, memberId);
             if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-                if (cache.get(key) == null) {
+                ShareSession shareSession = cache.get(key);
+                if (shareSession == null || !shareSession.connectionId().equals(clientConnectionId)) {
                     log.error("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
                 }
@@ -560,7 +597,7 @@ public class SharePartitionManager implements AutoCloseable {
             synchronized (cache) {
                 ShareSessionKey key = shareSessionKey(groupId, memberId);
                 ShareSession shareSession = cache.get(key);
-                if (shareSession == null) {
+                if (shareSession == null || !shareSession.connectionId().equals(clientConnectionId)) {
                     log.error("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
                 }
@@ -591,16 +628,18 @@ public class SharePartitionManager implements AutoCloseable {
      * @param groupId The group id in the share fetch request.
      * @param memberId The member id in the share fetch request.
      * @param shareSessionEpoch The epoch of share session utilized in the share fetch request.
+     * @param clientConnectionId The client connection id.
      */
-    public void acknowledgeSessionUpdate(String groupId, String memberId, int shareSessionEpoch) {
+    public void acknowledgeSessionUpdate(String groupId, String memberId, int shareSessionEpoch, String clientConnectionId) {
         if (shareSessionEpoch == ShareRequestMetadata.INITIAL_EPOCH) {
             // ShareAcknowledge Request cannot have epoch as INITIAL_EPOCH (0)
             throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
         } else {
+            maybeThrowIfConnectionUsedByAnotherSession(groupId, memberId, clientConnectionId);
             synchronized (cache) {
                 ShareSessionKey key = shareSessionKey(groupId, memberId);
                 ShareSession shareSession = cache.get(key);
-                if (shareSession == null) {
+                if (shareSession == null || !shareSession.connectionId().equals(clientConnectionId)) {
                     log.debug("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
                 }
@@ -616,6 +655,15 @@ public class SharePartitionManager implements AutoCloseable {
                 cache.updateNumPartitions(shareSession);
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
             }
+        }
+    }
+
+    private void maybeThrowIfConnectionUsedByAnotherSession(String groupId, String memberId, String clientConnectionId) {
+        ShareSessionKey key = shareSessionKey(groupId, memberId);
+        ShareSessionKey connectionKey = cache.connectionShareSessionKey(clientConnectionId);
+        if (connectionKey != null && !connectionKey.equals(key)) {
+            log.debug("Share session error for {}: the connection is used by share session {}", key, connectionKey);
+            throw Errors.SHARE_SESSION_NOT_FOUND.exception();
         }
     }
 
