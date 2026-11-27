@@ -35,7 +35,6 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 
 public class DefaultTaskExecutor implements TaskExecutor {
 
@@ -159,10 +158,6 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 if (processed) {
                     log.trace("Successfully processed task {}", task.id());
                     task.clearTaskTimeout();
-                    // TODO: enable regardless of whether using named topologies
-                    if (taskExecutionMetadata.hasNamedTopologies() && taskExecutionMetadata.processingMode() != EXACTLY_ONCE_V2) {
-                        taskExecutionMetadata.addToSuccessfullyProcessed(task);
-                    }
                 }
             } catch (final TimeoutException timeoutException) {
                 // TODO consolidate TimeoutException retries with general error handling
