@@ -35,6 +35,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
     private final SchemaGenerator schemaGenerator;
     private final CodeBuffer buffer;
     private Versions messageFlexibleVersions;
+    private MessageSpecType messageType;
 
     MessageDataGenerator(String packageName) {
         this.structRegistry = new StructRegistry();
@@ -62,6 +63,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         structRegistry.register(message);
         schemaGenerator.generateSchemas(message);
         messageFlexibleVersions = message.flexibleVersions();
+        messageType = message.type();
         generateClass(Optional.of(message),
             message.dataClassName(),
             message.struct(),
@@ -203,6 +205,10 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("%n");
         generateHashSetIterableConstructor(className);
         buffer.printf("%n");
+        if (messageType == MessageSpecType.RESPONSE) {
+            generateHashSetMaxProbeLengthMethod();
+            buffer.printf("%n");
+        }
         generateHashSetFindMethod(className, struct);
         buffer.printf("%n");
         generateHashSetFindAllMethod(className, struct);
@@ -244,6 +250,15 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             FieldSpec.collectionType(className), className);
         buffer.incrementIndent();
         buffer.printf("super(iterable.iterator());%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateHashSetMaxProbeLengthMethod() {
+        buffer.printf("@Override%n");
+        buffer.printf("protected int maxProbeLength() {%n");
+        buffer.incrementIndent();
+        buffer.printf("return RESPONSE_MAX_PROBE_LENGTH;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
