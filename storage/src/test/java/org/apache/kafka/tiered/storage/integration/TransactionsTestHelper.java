@@ -695,12 +695,16 @@ public class TransactionsTestHelper {
             var brokerServer = (BrokerServer) clusterInstance.brokers().get(coordinatorId);
             var txnManager = brokerServer.transactionCoordinator().transactionManager();
 
-            var optMeta = txnManager.getTransactionMetadata(transactionalId);
-            assertTrue(optMeta.isPresent());
-            optMeta.get().inLock(() -> {
-                optMeta.get().setProducerEpoch((short) (Short.MAX_VALUE - 2));
-                return null;
-            });
+            var metadata = txnManager.getTransactionMetadata(transactionalId).orElseThrow();
+            // EndTxn can return before the coordinator finishes the abort using the current epoch.
+            TestUtils.waitForCondition(() -> metadata.inLock(() -> {
+                if (metadata.state() != org.apache.kafka.coordinator.transaction.TransactionState.COMPLETE_ABORT
+                        || metadata.pendingTransitionInProgress()) {
+                    return false;
+                }
+                metadata.setProducerEpoch((short) (Short.MAX_VALUE - 2));
+                return true;
+            }), "First abort did not complete for " + transactionalId);
         }
 
         try (var producer = createTransactionalProducer(
