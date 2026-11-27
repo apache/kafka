@@ -1051,7 +1051,7 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testHeartbeatRequestWithFencedInstanceIdException() {
+    public void testHeartbeatRequestWithFencedInstanceIdException() throws InterruptedException {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
 
@@ -1061,9 +1061,12 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         mockClient.prepareResponse(heartbeatResponse(Errors.FENCED_INSTANCE_ID));
 
+        coordinator.ensureActiveGroup();
+        final BaseHeartbeatThread heartbeatThread = coordinator.heartbeatThread();
+        assertNotNull(heartbeatThread);
+
         assertThrows(FencedInstanceIdException.class,
             () -> {
-                coordinator.ensureActiveGroup();
                 mockTime.sleep(HEARTBEAT_INTERVAL_MS);
                 long startMs = System.currentTimeMillis();
                 while (System.currentTimeMillis() - startMs < 1000) {
@@ -1072,6 +1075,11 @@ public class AbstractCoordinatorTest {
                 }
             },
             "Expected pollHeartbeat to raise fenced instance id exception in 1 second");
+
+        // The failed heartbeat thread must not outlive the coordinator.
+        coordinator.close();
+        TestUtils.waitForCondition(() -> !heartbeatThread.isAlive(), 2000,
+            "The heartbeat thread should stop after it fails with a fenced instance id");
     }
 
     @Test
