@@ -152,6 +152,13 @@ public class ConfigCommand {
         }
     }
 
+    // --entity-type brokers accepts both --entity-name and --entity-default to alter the broker and cluster-default configs together
+    private static boolean isBrokerNameWithDefault(List<String> entityTypes, List<String> entityNames) {
+        return entityTypes.equals(List.of(BROKER_TYPE))
+                && entityNames.size() == 2
+                && entityNames.stream().filter(String::isEmpty).count() == 1;
+    }
+
     static Properties parseConfigsToBeAdded(ConfigCommandOptions opts) throws IOException {
         Properties props = new Properties();
         if (opts.options.has(opts.addConfigFile)) {
@@ -207,7 +214,10 @@ public class ConfigCommand {
                 opts.bootstrapServerOpt,
                 opts.bootstrapControllerOpt);
 
-        if (opts.options.has(opts.alterOpt) && opts.entityTypes().size() != opts.entityNames().size()) {
+        List<String> entityTypes = opts.entityTypes();
+        List<String> entityNames = opts.entityNames();
+        if (opts.options.has(opts.alterOpt) && entityTypes.size() != entityNames.size()
+                && !isBrokerNameWithDefault(entityTypes, entityNames)) {
             throw new IllegalArgumentException("An entity name must be specified for every entity type");
         }
 
@@ -224,7 +234,8 @@ public class ConfigCommand {
         List<String> entityTypes = opts.entityTypes();
         List<String> entityNames = opts.entityNames();
         String entityType = entityTypes.get(0);
-        String entityName = entityNames.get(0);
+        // only brokers may alter a specific entity and the default entity together
+        List<String> resourceNames = BROKER_TYPE.equals(entityType) ? entityNames : List.of(entityNames.get(0));
         Properties configsToBeAddedProps = parseConfigsToBeAdded(opts);
         Map<String, String> configsToBeAddedMap = configsToBeAddedProps.entrySet().stream()
                 .collect(Collectors.toMap(
@@ -246,9 +257,9 @@ public class ConfigCommand {
             } else if (CLIENT_METRICS_TYPE.equals(entityType)) {
                 configResourceType = ConfigResource.Type.CLIENT_METRICS;
             } else if (BROKER_TYPE.equals(entityType)) {
-                if (!BROKER_DEFAULT_ENTITY_NAME.equals(entityName)) {
-                    validateBrokerId(entityName, entityType);
-                }
+                resourceNames.stream()
+                        .filter(name -> !BROKER_DEFAULT_ENTITY_NAME.equals(name))
+                        .forEach(name -> validateBrokerId(name, entityType));
                 configResourceType = ConfigResource.Type.BROKER;
             } else if (GROUP_TYPE.equals(entityType)) {
                 configResourceType = ConfigResource.Type.GROUP;
@@ -258,7 +269,7 @@ public class ConfigCommand {
                 throw new IllegalArgumentException("Invalid entity type: " + entityType);
             }
             try {
-                alterResourceConfig(adminClient, entityName, configsToBeDeleted, configsToBeAdded, configResourceType);
+                alterResourceConfig(adminClient, resourceNames, configsToBeDeleted, configsToBeAdded, configResourceType);
             } catch (ExecutionException ee) {
                 if (ee.getCause() instanceof UnsupportedVersionException uve) {
                     // the cluster supports the API but may not support cluster mirrors yet, so surface the server's error as is
@@ -271,6 +282,7 @@ public class ConfigCommand {
                 throw ee;
             }
         } else if (BROKER_LOGGER_CONFIG_TYPE.equals(entityType)) {
+            String entityName = entityNames.get(0);
             List<String> validLoggers = getResourceConfig(adminClient, entityType, entityName, false, false).stream().map(ConfigEntry::name).toList();
             // fail the command if any of the configured broker loggers do not exist
             List<String> invalidBrokerLoggers = Stream.concat(
@@ -353,11 +365,13 @@ public class ConfigCommand {
             throw new IllegalArgumentException("Unsupported entity type: " + entityType);
         }
 
-        if (!entityName.isEmpty()) {
-            String entityTypeSingular = entityType.substring(0, entityType.length() - 1);
-            System.out.println("Completed updating config for " + entityTypeSingular + " " + entityName + ".");
-        } else {
-            System.out.println("Completed updating default config for " + entityType + " in the cluster.");
+        for (String entityName : resourceNames) {
+            if (!entityName.isEmpty()) {
+                String entityTypeSingular = entityType.substring(0, entityType.length() - 1);
+                System.out.println("Completed updating config for " + entityTypeSingular + " " + entityName + ".");
+            } else {
+                System.out.println("Completed updating default config for " + entityType + " in the cluster.");
+            }
         }
     }
 
@@ -611,13 +625,14 @@ public class ConfigCommand {
         }
     }
 
-    private static void alterResourceConfig(Admin adminClient, String entityNameHead, List<String> configsToBeDeleted, Map<String, ConfigEntry> configsToBeAdded, ConfigResource.Type resourceType) throws ExecutionException, InterruptedException, TimeoutException {
-        ConfigResource configResource = new ConfigResource(resourceType, entityNameHead);
+    private static void alterResourceConfig(Admin adminClient, List<String> entityNames, List<String> configsToBeDeleted, Map<String, ConfigEntry> configsToBeAdded, ConfigResource.Type resourceType) throws ExecutionException, InterruptedException, TimeoutException {
         AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000);
         List<AlterConfigOp> addEntries = configsToBeAdded.values().stream().map(k -> new AlterConfigOp(k, AlterConfigOp.OpType.SET)).toList();
         List<AlterConfigOp> deleteEntries = configsToBeDeleted.stream().map(k -> new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE)).toList();
         Collection<AlterConfigOp> alterEntries = Stream.concat(deleteEntries.stream(), addEntries.stream()).toList();
-        adminClient.incrementalAlterConfigs(Map.of(configResource, alterEntries), alterOptions).all().get(60, TimeUnit.SECONDS);
+        Map<ConfigResource, Collection<AlterConfigOp>> configs = entityNames.stream()
+                .collect(Collectors.toMap(name -> new ConfigResource(resourceType, name), name -> alterEntries));
+        adminClient.incrementalAlterConfigs(configs, alterOptions).all().get(60, TimeUnit.SECONDS);
     }
 
     static void validateBrokerId(String entityName, String entityType) {
