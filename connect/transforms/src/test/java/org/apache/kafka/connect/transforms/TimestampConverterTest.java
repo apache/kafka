@@ -57,7 +57,11 @@ public class TimestampConverterTest {
     private static final long DATE_PLUS_TIME_UNIX_NANOS;
     private static final long DATE_PLUS_TIME_UNIX_SECONDS;
     private static final String STRING_DATE_FMT = "yyyy MM dd HH mm ss SSS z";
+    private static final String STRING_DATE_FMT_MICROS = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'";
+    private static final String STRING_DATE_FMT_NANOS = "yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS'Z'";
     private static final String DATE_PLUS_TIME_STRING;
+    private static final String DATE_PLUS_TIME_STRING_MICROS = "1970-01-02T00:00:01.234123Z";
+    private static final String DATE_PLUS_TIME_STRING_NANOS = "1970-01-02T00:00:01.234123456Z";
 
     private final TimestampConverter<SourceRecord> xformKey = new TimestampConverter.Key<>();
     private final TimestampConverter<SourceRecord> xformValue = new TimestampConverter.Value<>();
@@ -144,6 +148,27 @@ public class TimestampConverterTest {
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
         config.put(TimestampConverter.FORMAT_CONFIG, "bad-format");
         assertThrows(ConfigException.class, () -> xformValue.configure(config));
+    }
+
+    @Test
+    public void testConfigInvalidDateTimeFormatterPattern() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
+        config.put(TimestampConverter.FORMAT_CONFIG, "bad-format");
+        config.put(TimestampConverter.FORMAT_TYPE_CONFIG, TimestampConverter.FORMAT_TYPE_DATE_TIME_FORMATTER);
+        assertThrows(ConfigException.class, () -> xformValue.configure(config));
+    }
+
+    @Test
+    public void testFormatTypeDefaultsToSimpleDateFormat() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME.getTime()));
+
+        assertNull(transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME_STRING, transformed.value());
     }
 
     // Conversions without schemas (most flexible Timestamp -> other types)
@@ -709,6 +734,156 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME_UNIX_SECONDS, transformed.value());
+    }
+
+    // Sub-millisecond string to unix conversions (DateTimeFormatter path)
+
+    @Test
+    public void testSchemalessStringMicrosToUnixMicros() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "microseconds");
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT_MICROS);
+        config.put(TimestampConverter.FORMAT_TYPE_CONFIG, TimestampConverter.FORMAT_TYPE_DATE_TIME_FORMATTER);
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_STRING_MICROS));
+
+        assertNull(transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME_UNIX_MICROS, transformed.value());
+    }
+
+    @Test
+    public void testSchemalessStringNanosToUnixNanos() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "nanoseconds");
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT_NANOS);
+        config.put(TimestampConverter.FORMAT_TYPE_CONFIG, TimestampConverter.FORMAT_TYPE_DATE_TIME_FORMATTER);
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_STRING_NANOS));
+
+        assertNull(transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME_UNIX_NANOS, transformed.value());
+    }
+
+    @Test
+    public void testSchemalessUnixMicrosToStringMicros() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "microseconds");
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT_MICROS);
+        config.put(TimestampConverter.FORMAT_TYPE_CONFIG, TimestampConverter.FORMAT_TYPE_DATE_TIME_FORMATTER);
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_UNIX_MICROS));
+
+        assertNull(transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME_STRING_MICROS, transformed.value());
+    }
+
+    @Test
+    public void testSchemalessUnixNanosToStringNanos() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "nanoseconds");
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT_NANOS);
+        config.put(TimestampConverter.FORMAT_TYPE_CONFIG, TimestampConverter.FORMAT_TYPE_DATE_TIME_FORMATTER);
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_UNIX_NANOS));
+
+        assertNull(transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME_STRING_NANOS, transformed.value());
+    }
+
+    @Test
+    public void testSchemalessStringMicrosToStringMicros() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT_MICROS);
+        config.put(TimestampConverter.FORMAT_TYPE_CONFIG, TimestampConverter.FORMAT_TYPE_DATE_TIME_FORMATTER);
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_STRING_MICROS));
+
+        assertNull(transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME_STRING_MICROS, transformed.value());
+    }
+
+    @Test
+    public void testStringNanosToUnixMicros() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "microseconds");
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT_NANOS);
+        config.put(TimestampConverter.FORMAT_TYPE_CONFIG, TimestampConverter.FORMAT_TYPE_DATE_TIME_FORMATTER);
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_STRING_NANOS));
+
+        assertNull(transformed.valueSchema());
+        // 456 sub-microsecond nanos truncated
+        assertEquals(DATE_PLUS_TIME_UNIX_MICROS, transformed.value());
+    }
+
+    // Sub-millisecond precision preservation for unix-to-unix conversions
+
+    @Test
+    public void testSchemalessUnixMicrosToUnixMicros() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "microseconds");
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_UNIX_MICROS));
+
+        assertNull(transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME_UNIX_MICROS, transformed.value());
+    }
+
+    @Test
+    public void testSchemalessUnixNanosToUnixNanos() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "nanoseconds");
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_UNIX_NANOS));
+
+        assertNull(transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME_UNIX_NANOS, transformed.value());
+    }
+
+    @Test
+    public void testWithSchemaUnixMicrosToUnixMicros() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.FIELD_CONFIG, "ts");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "microseconds");
+        xformValue.configure(config);
+
+        Schema structSchema = SchemaBuilder.struct()
+                .field("ts", Schema.INT64_SCHEMA)
+                .build();
+        Struct original = new Struct(structSchema);
+        original.put("ts", DATE_PLUS_TIME_UNIX_MICROS);
+
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(structSchema, original));
+
+        assertEquals(DATE_PLUS_TIME_UNIX_MICROS, ((Struct) transformed.value()).get("ts"));
+    }
+
+    @Test
+    public void testWithSchemaUnixNanosToUnixNanos() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.FIELD_CONFIG, "ts");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "nanoseconds");
+        xformValue.configure(config);
+
+        Schema structSchema = SchemaBuilder.struct()
+                .field("ts", Schema.INT64_SCHEMA)
+                .build();
+        Struct original = new Struct(structSchema);
+        original.put("ts", DATE_PLUS_TIME_UNIX_NANOS);
+
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(structSchema, original));
+
+        assertEquals(DATE_PLUS_TIME_UNIX_NANOS, ((Struct) transformed.value()).get("ts"));
     }
 
     // Validate Key implementation in addition to Value
