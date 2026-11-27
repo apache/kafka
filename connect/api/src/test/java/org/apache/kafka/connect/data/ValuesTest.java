@@ -916,6 +916,17 @@ public class ValuesTest {
     }
 
     @Test
+    public void shouldConvertTimestampBeforeEpochToDate() {
+        java.util.Date lastMillisecondOf1969 = new java.util.Date(-1L);
+        java.util.Date noonOnLastDayOf1969 = new java.util.Date(-MILLIS_PER_DAY / 2);
+        java.util.Date lastDayOf1969 = new java.util.Date(-MILLIS_PER_DAY);
+
+        assertEquals(lastDayOf1969, Values.convertToDate(Timestamp.SCHEMA, lastMillisecondOf1969));
+        assertEquals(lastDayOf1969, Values.convertToDate(Timestamp.SCHEMA, noonOnLastDayOf1969));
+        assertEquals(lastDayOf1969, Values.convertToDate(Timestamp.SCHEMA, lastDayOf1969));
+    }
+
+    @Test
     public void shouldConvertTimestampValues() {
         LocalDateTime localTime = LocalDateTime.now();
         LocalDateTime localTimeTruncated = localTime.truncatedTo(ChronoUnit.MILLIS);
