@@ -37,6 +37,7 @@ import org.apache.kafka.tiered.storage.actions.ExpectEmptyRemoteStorageAction;
 import org.apache.kafka.tiered.storage.actions.ExpectLeaderAction;
 import org.apache.kafka.tiered.storage.actions.ExpectLeaderEpochCheckpointAction;
 import org.apache.kafka.tiered.storage.actions.ExpectListOffsetsAction;
+import org.apache.kafka.tiered.storage.actions.ExpectLogOffsetsAction;
 import org.apache.kafka.tiered.storage.actions.ExpectUserTopicMappedToMetadataPartitionsAction;
 import org.apache.kafka.tiered.storage.actions.ProduceAction;
 import org.apache.kafka.tiered.storage.actions.ReassignReplicaAction;
@@ -258,6 +259,17 @@ public final class TieredStorageTestBuilder {
                                                       EpochEntry epochEntry) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new ExpectListOffsetsAction(topicPartition, offsetSpec, epochEntry));
+        return this;
+    }
+
+    public TieredStorageTestBuilder expectLogOffsets(int brokerId,
+                                                     String topic,
+                                                     int partition,
+                                                     long highWatermark,
+                                                     long lastStableOffset,
+                                                     long logEndOffset) {
+        TopicPartition topicPartition = new TopicPartition(topic, partition);
+        actions.add(new ExpectLogOffsetsAction(brokerId, topicPartition, highWatermark, lastStableOffset, logEndOffset));
         return this;
     }
 
