@@ -3008,13 +3008,15 @@ public class AssignmentRefinerTest {
             "memberA1", member("memberA1", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
             "memberA2", member("memberA2", "processA", TasksTuple.EMPTY),
             "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1, 2))),
-            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY),
+            "memberD", member("memberD", "processD", TasksTuple.EMPTY)
         );
         final Map<String, TasksTuple> targetAssignment = Map.of(
             "memberA1", TasksTuple.EMPTY,
             "memberA2", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
             "memberB", TasksTuple.EMPTY,
-            "memberC", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1, 2))
+            "memberC", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1)),
+            "memberD", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 2))
         );
         // memberB is still restoring STATEFUL_2, and memberC heartbeats with version 0.
         final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberB", offsets(2, 500L, 10_000L));
@@ -3033,9 +3035,81 @@ public class AssignmentRefinerTest {
                 new AssignmentRefinerImpl.StagedMigration(
                     STATEFUL_1, "memberB", "memberC", Optional.of("processC"), Optional.empty()),
                 new AssignmentRefinerImpl.StagedMigration(
-                    STATEFUL_2, "memberB", "memberC", Optional.of("processC"), Optional.empty())
+                    STATEFUL_2, "memberB", "memberD", Optional.of("processD"), Optional.empty())
             ),
             decisions.stagedMigrations()
+        );
+    }
+
+    @Test
+    public void shouldNotWarmUpAVersion0TargetOwnerWhenActiveTasksHaveToStay() {
+        // Every member has been heard from, so warm-up tasks are funded, but memberB heartbeats with version 0 and
+        // could never be seen to catch up.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of("memberB", 0));
+
+        assertEquals(
+            Map.of(
+                "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+                "memberB", TasksTuple.EMPTY
+            ),
+            assemble(members, targetAssignment, Map.of(), heartbeatVersions, true, 1)
+        );
+    }
+
+    @Test
+    public void shouldKeepTheStandbyOfAVersion0TargetOwnerWhenActiveTasksHaveToStay() {
+        // memberB heartbeats with version 0 and can't be warmed up, but the standby task it holds keeps restoring
+        // the task's state on processB until memberB takes the task over in a later epoch.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of("memberB", 0));
+
+        assertEquals(
+            Map.of(
+                "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+                "memberB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+            ),
+            assemble(members, targetAssignment, Map.of(), heartbeatVersions, true, 1)
+        );
+    }
+
+    @Test
+    public void shouldKeepASiblingStandbyOfAVersion0TargetOwnerWhenActiveTasksHaveToStay() {
+        // memberB2 heartbeats with version 0 and can't be warmed up, so the standby task of its sibling memberB1 is not
+        // moved onto it but stays where it is, without spending a warm-up slot.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB1", member("memberB1", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberB2", member("memberB2", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB1", TasksTuple.EMPTY,
+            "memberB2", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of("memberB2", 0));
+
+        assertEquals(
+            Map.of(
+                "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+                "memberB1", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+                "memberB2", TasksTuple.EMPTY
+            ),
+            assemble(members, targetAssignment, Map.of(), heartbeatVersions, true, 1)
         );
     }
 
@@ -3211,6 +3285,7 @@ public class AssignmentRefinerTest {
             analyze(members, targetAssignment, taskOffsets, heartbeatVersions),
             index(members, taskOffsets),
             members,
+            heartbeatVersions,
             heartbeatVersions.keySet().containsAll(members.keySet()),
             numWarmupReplicas
         );
@@ -3249,7 +3324,13 @@ public class AssignmentRefinerTest {
                 targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies())),
             currentAssignment,
             decisions,
-            AssignmentRefinerImpl.planWarmups(decisions, currentAssignment, members, true, numWarmupReplicas),
+            AssignmentRefinerImpl.planWarmups(
+                decisions,
+                currentAssignment,
+                members,
+                heartbeatVersions(members, Map.of()),
+                true,
+                numWarmupReplicas),
             members,
             AssignmentRefinerImpl.statefulSubtopologies(subtopologies())
         );
