@@ -1259,8 +1259,26 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     ) {
         String groupId = classicGroup.groupId();
         ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
-        consumerGroup.setGroupEpoch(classicGroup.generationId());
-        consumerGroup.setTargetAssignmentMetadata(classicGroup.generationId(), 0L);
+        // When the classic group is at generation 0, the target assignment epoch is bumped to 1, to keep
+        // new members out of epoch 0 when the assignor is offloaded and the new target assignment is not
+        // ready yet. Epoch 0 is reserved to signal a joining member in consumer group heartbeats and
+        // cannot be given to a member.
+        int targetAssignmentEpoch = Math.max(classicGroup.generationId(), 1);
+        int groupEpoch = switch (classicGroup.currentState()) {
+            case EMPTY, STABLE, DEAD -> targetAssignmentEpoch;
+            case PREPARING_REBALANCE -> targetAssignmentEpoch + 1; // We are expecting a new assignment.
+            case COMPLETING_REBALANCE -> {
+                // We are expecting a new assignment. The generation was already bumped when the join
+                // phase completed, but the members have not received its assignment yet. The members
+                // may have already observed the bumped generation id in their JoinGroup responses and
+                // will send it in their SyncGroup and Heartbeat requests. We must keep the generation id
+                // as their member epoch and the target assignment epoch, and bump the group epoch
+                // a second time to compute a new target assignment.
+                yield targetAssignmentEpoch + 1;
+            }
+        };
+        consumerGroup.setGroupEpoch(groupEpoch);
+        consumerGroup.setTargetAssignmentMetadata(targetAssignmentEpoch, 0L);
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
             // The assigned partition can be empty if the member just joined and has never synced.
@@ -1290,16 +1308,16 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             // group was in Preparing Rebalance or Completing Rebalance states, the classic members are
             // asked to rejoin the group to re-trigger a rebalance or collect their assignments.
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
-                .setMemberEpoch(classicGroup.generationId())
+                .setMemberEpoch(targetAssignmentEpoch)
                 .setState(MemberState.STABLE)
-                .setPreviousMemberEpoch(classicGroup.generationId())
+                .setPreviousMemberEpoch(targetAssignmentEpoch)
                 .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
                 .setRackId(toOptional(subscription.rackId()).orElse(null))
                 .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
                 .setClientId(classicGroupMember.clientId())
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
-                .setAssignedPartitions(Utils.toAssignmentWithEpochs(assignedPartitions, classicGroup.generationId()))
+                .setAssignedPartitions(Utils.toAssignmentWithEpochs(assignedPartitions, targetAssignmentEpoch))
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())

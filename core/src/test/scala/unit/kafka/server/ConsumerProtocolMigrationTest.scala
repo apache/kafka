@@ -20,7 +20,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupResponseData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupResponseData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{HeartbeatRequest, HeartbeatResponse}
@@ -863,12 +863,53 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
   @ClusterTest(
     serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade")
+    )
+  )
+  def testUpgradeFromPreparingRebalanceClassicGroup(): Unit = {
+    testUpgradeFromClassicGroup(ClassicGroupState.PREPARING_REBALANCE)
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade")
+    )
+  )
+  def testUpgradeFromCompletingRebalanceClassicGroup(): Unit = {
+    testUpgradeFromClassicGroup(ClassicGroupState.COMPLETING_REBALANCE)
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade")
+    )
+  )
+  def testUpgradeFromStableClassicGroup(): Unit = {
+    testUpgradeFromClassicGroup(ClassicGroupState.STABLE)
+  }
+
+  /**
+   * Tests the upgrade of a classic group at generation 0 when a new member joins with the consumer
+   * protocol.
+   *
+   * No generation has completed, so like a new group, the upgraded group starts with an empty target
+   * assignment at epoch 1 and no member gets epoch 0, which is reserved for joining members. The
+   * classic group is rebalancing, so the upgraded group epoch is bumped to 2 before the new member
+   * bumps it to 3. No protocol has been selected yet, so the classic members take their subscriptions
+   * from their first protocol.
+   *
+   * @see testUpgradeFromClassicGroupAtGenerationZeroFromExistingStaticMember
+   * @see testUpgradeFromClassicGroupAtGenerationZeroFromNewMemberWithEmptyResolvedRegex
+   * @see GroupMetadataManagerTest#testConsumerGroupHeartbeatWithClassicGroupAtGenerationZero()
+   */
+  @ClusterTest(
+    serverProperties = Array(
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade"),
       // The initial rebalance of the classic group does not complete during the test.
       new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "600000")
     )
   )
-  def testUpgradeFromClassicGroupWithoutSelectedProtocol(): Unit = {
+  def testUpgradeFromClassicGroupAtGenerationZero(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -910,7 +951,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    assertEquals(1, response.memberEpoch)
+    assertEquals(3, response.memberEpoch)
 
     // The pending join request of the classic member is asked to rejoin.
     assertEquals(Errors.REBALANCE_IN_PROGRESS.code, Await.result(joinFuture1, Duration.Inf).errorCode)
@@ -933,6 +974,213 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // The classic member keeps its subscription.
     assertEquals(
       Map(memberId1 -> List("foo"), memberId2 -> List("foo")),
+      consumerGroupDescribe(List(groupId)).head.members.asScala
+        .map(member => member.memberId -> member.subscribedTopicNames.asScala.toList)
+        .toMap
+    )
+  }
+
+  /**
+   * Tests the upgrade of a classic group at generation 0 by a static member that restarts with the
+   * consumer protocol.
+   *
+   * No generation has completed, so like a new group, the upgraded group starts with an empty target
+   * assignment at epoch 1 and no member gets epoch 0, which is reserved for joining members. The
+   * classic group is rebalancing, so the upgraded group epoch is bumped to 2. The static member
+   * replaces itself with the same subscription, so nothing else bumps the group epoch. No protocol
+   * has been selected yet, so the classic members take their subscriptions from their first protocol.
+   *
+   * @see testUpgradeFromClassicGroupAtGenerationZero
+   * @see GroupMetadataManagerTest#testConsumerGroupHeartbeatWithClassicGroupAtGenerationZeroFromExistingStaticMember()
+   */
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade"),
+      // The initial rebalance of the classic group does not complete during the test.
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "600000")
+    )
+  )
+  def testUpgradeFromClassicGroupAtGenerationZeroFromExistingStaticMember(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(topic = "foo", numPartitions = 3)
+
+    // Static classic member 1 joins the classic group.
+    val groupId = "grp"
+    val instanceId1 = "instance-id-1"
+    val protocolNames = List("consumer-range", "consumer-cooperative-sticky")
+    val joinFuture1 = Future {
+      sendJoinRequest(
+        groupId = groupId,
+        groupInstanceId = instanceId1,
+        protocolNames = protocolNames,
+        metadata = metadata(List.empty)
+      )
+    }
+
+    // The group is in PreparingRebalance until the initial rebalance completes, and it has not
+    // selected a protocol yet.
+    TestUtils.waitUntilTrue(() => {
+      val described = describeGroups(groupIds = List(groupId))
+      ClassicGroupState.PREPARING_REBALANCE.toString == described.head.groupState
+    }, msg = s"The group is not in PREPARING_REBALANCE state.")
+
+    // Static member 1 restarts with the consumer protocol and the same subscription.
+    val newMemberId1 = Uuid.randomUuid.toString
+    var response = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = newMemberId1,
+      instanceId = instanceId1,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+    assertEquals(if (isConsumerAssignorOffloadEnabled) 1 else 2, response.memberEpoch)
+
+    // When assignor offload is enabled, the new assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        response = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = newMemberId1,
+          memberEpoch = response.memberEpoch,
+          instanceId = instanceId1,
+          expectedError = Errors.NONE
+        )
+        response.memberEpoch > 1
+      }, msg = s"Did not receive new assignment. Last response $response.")
+    }
+
+    // The pending join request of the replaced classic member is asked to rejoin.
+    assertEquals(Errors.REBALANCE_IN_PROGRESS.code, Await.result(joinFuture1, Duration.Inf).errorCode)
+
+    // The group has become a consumer group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.STABLE.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+
+    // The static member keeps its subscription.
+    assertEquals(
+      Map(newMemberId1 -> List("foo")),
+      consumerGroupDescribe(List(groupId)).head.members.asScala
+        .map(member => member.memberId -> member.subscribedTopicNames.asScala.toList)
+        .toMap
+    )
+  }
+
+  /**
+   * Tests the upgrade of a classic group at generation 0 by a new member that joins with a regex
+   * that resolves to no topics.
+   *
+   * No generation has completed, so like a new group, the upgraded group starts with an empty target
+   * assignment at epoch 1 and no member gets epoch 0, which is reserved for joining members. The
+   * classic group is rebalancing, so the upgraded group epoch is bumped to 2. Neither the join nor
+   * the resolution of the regex bumps the group epoch. No protocol has been selected yet, so the
+   * classic members take their subscriptions from their first protocol.
+   *
+   * @see testUpgradeFromClassicGroupAtGenerationZero
+   * @see GroupMetadataManagerTest#testConsumerGroupHeartbeatWithClassicGroupAtGenerationZeroFromNewMemberWithEmptyResolvedRegex()
+   */
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade"),
+      // The initial rebalance of the classic group does not complete during the test.
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "600000")
+    )
+  )
+  def testUpgradeFromClassicGroupAtGenerationZeroFromNewMemberWithEmptyResolvedRegex(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(topic = "foo", numPartitions = 3)
+
+    // Classic member 1 joins the classic group.
+    val groupId = "grp"
+    val protocolNames = List("consumer-range", "consumer-cooperative-sticky")
+    val memberId1 = sendJoinRequest(
+      groupId = groupId,
+      protocolNames = protocolNames,
+      metadata = metadata(List.empty)
+    ).memberId
+    val joinFuture1 = Future {
+      sendJoinRequest(
+        groupId = groupId,
+        memberId = memberId1,
+        protocolNames = protocolNames,
+        metadata = metadata(List.empty)
+      )
+    }
+
+    // The group is in PreparingRebalance until the initial rebalance completes, and it has not
+    // selected a protocol yet.
+    TestUtils.waitUntilTrue(() => {
+      val described = describeGroups(groupIds = List(groupId))
+      ClassicGroupState.PREPARING_REBALANCE.toString == described.head.groupState
+    }, msg = s"The group is not in PREPARING_REBALANCE state.")
+
+    // The joining request with a consumer group member 2 with a regex that resolves to no topics is
+    // accepted.
+    val memberId2 = Uuid.randomUuid.toString
+    var response = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberId2,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicRegex = "baz",
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+    assertEquals(if (isConsumerAssignorOffloadEnabled) 1 else 2, response.memberEpoch)
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        response = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = response.memberEpoch,
+          expectedError = Errors.NONE
+        )
+        response.memberEpoch > 1
+      }, msg = s"Did not receive initial assignment. Last response $response.")
+    }
+
+    // The pending join request of the classic member is asked to rejoin.
+    assertEquals(Errors.REBALANCE_IN_PROGRESS.code, Await.result(joinFuture1, Duration.Inf).errorCode)
+
+    // The group has become a consumer group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.RECONCILING.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+
+    // The classic member keeps its subscription.
+    assertEquals(
+      Map(memberId1 -> List("foo"), memberId2 -> List.empty),
       consumerGroupDescribe(List(groupId)).head.members.asScala
         .map(member => member.memberId -> member.subscribedTopicNames.asScala.toList)
         .toMap
@@ -993,7 +1241,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    assertEquals(generationId1 + 1, response.memberEpoch)
+    assertEquals(generationId1 + 2, response.memberEpoch)
 
     // The pending join request of classic member 2 is asked to rejoin.
     assertEquals(Errors.REBALANCE_IN_PROGRESS.code, Await.result(joinFuture2, Duration.Inf).errorCode)
@@ -1845,6 +2093,151 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         typesFilter = List(Group.GroupType.CLASSIC.toString)
       )
     )
+  }
+
+  /**
+   * Tests the upgrade of a classic group at different stages of a rebalance. The classic group is advanced
+   * from Stable at generation 1 to the given state, then a new member joins with the consumer protocol.
+   *
+   * @param state The state of the classic group when it is upgraded.
+   * @see GroupMetadataManagerTest#testConsumerGroupHeartbeatWithClassicGroup(ClassicGroupState)
+   */
+  private def testUpgradeFromClassicGroup(state: ClassicGroupState): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(topic = "foo", numPartitions = 3)
+
+    // Classic member 1 joins the classic group, which becomes stable at generation 1.
+    val groupId = "grp"
+    val (memberId1, generationId1) = joinDynamicConsumerGroupWithOldProtocol(
+      groupId = groupId,
+      metadata = metadata(List.empty),
+      assignment = assignment(List(0, 1, 2))
+    )
+    assertEquals(1, generationId1)
+
+    // The expected generation of the classic group in the target state.
+    val generationId = state match {
+      case ClassicGroupState.PREPARING_REBALANCE => 1
+      case ClassicGroupState.COMPLETING_REBALANCE => 2 // The generation is bumped after all members rejoin, before they sync.
+      case ClassicGroupState.STABLE => 2
+      case _ => throw new IllegalArgumentException(s"Unexpected state $state")
+    }
+    // The expected group epoch of the upgraded group, before the new member joins and bumps it again.
+    val groupEpoch = state match {
+      case ClassicGroupState.PREPARING_REBALANCE => 2 // Bumped by the upgrade of a rebalancing group.
+      case ClassicGroupState.COMPLETING_REBALANCE => 3 // Bumped by the new generation, then by the upgrade of a rebalancing group.
+      case ClassicGroupState.STABLE => 2
+      case _ => throw new IllegalArgumentException(s"Unexpected state $state")
+    }
+
+    // Advance the group to the target state. Classic member 2 joins, triggering a rebalance.
+    val memberId2 = sendJoinRequest(
+      groupId = groupId,
+      metadata = metadata(List.empty)
+    ).memberId
+    val joinFuture2 = Future {
+      sendJoinRequest(
+        groupId = groupId,
+        memberId = memberId2,
+        metadata = metadata(List.empty)
+      )
+    }
+
+    TestUtils.waitUntilTrue(() => {
+      val described = describeGroups(groupIds = List(groupId))
+      ClassicGroupState.PREPARING_REBALANCE.toString == described.head.groupState
+    }, msg = s"The group is not in PREPARING_REBALANCE state.")
+
+    var syncFuture2: Future[SyncGroupResponseData] = null
+    if (state == ClassicGroupState.COMPLETING_REBALANCE || state == ClassicGroupState.STABLE) {
+      // The leader rejoins. All members have rejoined so the group transitions to COMPLETING_REBALANCE state.
+      val joinResponse1 = sendJoinRequest(
+        groupId = groupId,
+        memberId = memberId1,
+        metadata = metadata(List.empty)
+      )
+      assertEquals(Errors.NONE.code, joinResponse1.errorCode)
+      assertEquals(2, joinResponse1.generationId)
+      assertEquals(Errors.NONE.code, Await.result(joinFuture2, Duration.Inf).errorCode)
+
+      // The follower syncs and waits for the leader's assignment.
+      syncFuture2 = Future {
+        syncGroupWithOldProtocol(
+          groupId = groupId,
+          memberId = memberId2,
+          generationId = 2
+        )
+      }
+    }
+
+    if (state == ClassicGroupState.STABLE) {
+      // The leader syncs with the same assignment.
+      verifySyncGroupWithOldProtocol(
+        groupId = groupId,
+        memberId = memberId1,
+        generationId = 2,
+        assignments = List(
+          new SyncGroupRequestData.SyncGroupRequestAssignment()
+            .setMemberId(memberId1)
+            .setAssignment(assignment(List(0, 1, 2))),
+          new SyncGroupRequestData.SyncGroupRequestAssignment()
+            .setMemberId(memberId2)
+            .setAssignment(assignment(List.empty))
+        ),
+        expectedAssignment = assignment(List(0, 1, 2))
+      )
+      assertEquals(Errors.NONE.code, Await.result(syncFuture2, Duration.Inf).errorCode)
+    }
+
+    assertEquals(state.toString, describeGroups(groupIds = List(groupId)).head.groupState)
+
+    // The joining request with a consumer group member 3 is accepted.
+    val memberId3 = Uuid.randomUuid.toString
+    var response = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberId3,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+    assertEquals(if (isConsumerAssignorOffloadEnabled) generationId else groupEpoch + 1, response.memberEpoch)
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        response = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId3,
+          memberEpoch = response.memberEpoch,
+          expectedError = Errors.NONE
+        )
+        response.memberEpoch > generationId
+      }, msg = s"Did not receive initial assignment. Last response $response.")
+    }
+
+    // The classic members with pending requests are asked to rejoin.
+    if (state == ClassicGroupState.PREPARING_REBALANCE) {
+      assertEquals(Errors.REBALANCE_IN_PROGRESS.code, Await.result(joinFuture2, Duration.Inf).errorCode)
+    }
+    if (state == ClassicGroupState.COMPLETING_REBALANCE) {
+      assertEquals(Errors.REBALANCE_IN_PROGRESS.code, Await.result(syncFuture2, Duration.Inf).errorCode)
+
+      // The leader received generation 2 in its join response. It syncs after the upgrade and is
+      // asked to rejoin.
+      assertEquals(
+        Errors.REBALANCE_IN_PROGRESS.code,
+        syncGroupWithOldProtocol(
+          groupId = groupId,
+          memberId = memberId1,
+          generationId = 2
+        ).errorCode
+      )
+    }
   }
 
   private def metadata(ownedPartitions: List[Int]): Array[Byte] = {
