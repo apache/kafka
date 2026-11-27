@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.protocol.Errors;
 
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Options for {@link Admin#addRaftVoter}.
@@ -37,6 +40,8 @@ import java.util.Optional;
 @InterfaceAudience.Public
 public class AddRaftVoterOptions extends AbstractOptions<AddRaftVoterOptions> {
     private Optional<String> clusterId = Optional.empty();
+    private Optional<Uuid> voterDirectoryId = Optional.empty();
+    private Set<RaftVoterEndpoint> endpoints = Set.of();
 
     public AddRaftVoterOptions setClusterId(Optional<String> clusterId) {
         this.clusterId = clusterId;
@@ -45,5 +50,49 @@ public class AddRaftVoterOptions extends AbstractOptions<AddRaftVoterOptions> {
 
     public Optional<String> clusterId() {
         return clusterId;
+    }
+
+    public AddRaftVoterOptions setVoterDirectoryId(Optional<Uuid> voterDirectoryId) {
+        this.voterDirectoryId = voterDirectoryId;
+        return this;
+    }
+
+    public Optional<Uuid> voterDirectoryId() {
+        return voterDirectoryId;
+    }
+
+    public AddRaftVoterOptions setEndpoints(Set<RaftVoterEndpoint> endpoints) {
+        this.endpoints = endpoints;
+        return this;
+    }
+
+    public Set<RaftVoterEndpoint> endpoints() {
+        return endpoints;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        AddRaftVoterOptions that = (AddRaftVoterOptions) o;
+        return Objects.equals(clusterId, that.clusterId) &&
+            Objects.equals(voterDirectoryId, that.voterDirectoryId) &&
+            Objects.equals(endpoints, that.endpoints) &&
+            Objects.equals(timeoutMs, that.timeoutMs);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(clusterId, voterDirectoryId, endpoints, timeoutMs);
+    }
+
+    @Override
+    public String toString() {
+        return "AddRaftVoterOptions(" +
+            "clusterId=" + clusterId +
+            ", voterDirectoryId=" + voterDirectoryId +
+            ", endpoints=" + endpoints +
+            ", timeoutMs=" + timeoutMs +
+            ')';
     }
 }
