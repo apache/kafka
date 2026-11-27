@@ -1,6 +1,6 @@
 ---
 title: "Documentation Redirect Legacy"
-url: "/44/documentation.html"
+url: "/45/documentation.html"
 robots: "noindex"
 _build:
   list: false
