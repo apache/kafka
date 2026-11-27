@@ -320,7 +320,7 @@ Processors can schedule punctuators to handle periodic tasks. The mock context d
     final Punctuator punctuator = capturedPunctuator.getPunctuator();
     punctuator.punctuate(/*timestamp*/ 0L);
 
-If you need to write tests involving automatic firing of scheduled punctuators, we recommend creating a simple topology with your processor and using the [`TopologyTestDriver`](.#testing-topologytestdriver). 
+If you need to write tests involving automatic firing of scheduled punctuators, we recommend creating a simple topology with your processor and using the [`TopologyTestDriver`](.#testing-a-streams-application). 
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
