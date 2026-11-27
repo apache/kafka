@@ -116,6 +116,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -2659,6 +2660,111 @@ public class TaskManagerTest {
         verify(corruptedActive).postCommit(true);
         verify(corruptedActive).addPartitionsForOffsetReset(taskId00Partitions);
         verify(consumer, never()).commitSync(emptyMap());
+        verify(uncorruptedActive, never()).closeDirty();
+        verify(uncorruptedActive, never()).addPartitionsForOffsetReset(any());
+    }
+
+    @Test
+    public void shouldCloseAndReviveUncommittedTasksOnCorruptedActiveTaskDuringRebalanceWithEOS() {
+        final StreamTask corruptedActive = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING)
+            .build();
+        final StreamTask uncorruptedActive = statelessTask(taskId01)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.initializedTask(taskId00)).thenReturn(corruptedActive);
+        when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(
+            mkEntry(taskId00, corruptedActive),
+            mkEntry(taskId01, uncorruptedActive)
+        ));
+        when(tasks.activeInitializedTaskIds()).thenReturn(Set.of(taskId00, taskId01));
+        when(uncorruptedActive.commitNeeded()).thenReturn(true);
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, tasks);
+        taskManager.handleRebalanceStart(singleton(topic1));
+
+        assertTrue(taskManager.handleCorruption(singleton(taskId00)));
+
+        verify(uncorruptedActive, never()).prepareCommit(true);
+        verify(uncorruptedActive, never()).postCommit(anyBoolean());
+        verify(uncorruptedActive, never()).markChangelogAsCorrupted(any());
+        verify(uncorruptedActive).closeDirty();
+        verify(uncorruptedActive).addPartitionsForOffsetReset(taskId01Partitions);
+        verify(uncorruptedActive).revive();
+        verify(tasks).removeTask(uncorruptedActive);
+        verify(tasks).addPendingTasksToInit(Set.of(uncorruptedActive));
+        verify(corruptedActive).closeDirty();
+        verify(corruptedActive).addPartitionsForOffsetReset(taskId00Partitions);
+        verify(activeTaskCreator, never()).streamsProducer();
+    }
+
+    @Test
+    public void shouldNotCloseAndReviveTasksThatDoNotNeedCommitOnCorruptedActiveTaskDuringRebalanceWithEOS() {
+        final StreamTask corruptedActive = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING)
+            .build();
+        final StreamTask uncorruptedActive = statelessTask(taskId01)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.initializedTask(taskId00)).thenReturn(corruptedActive);
+        when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(
+            mkEntry(taskId00, corruptedActive),
+            mkEntry(taskId01, uncorruptedActive)
+        ));
+        when(tasks.activeInitializedTaskIds()).thenReturn(Set.of(taskId00, taskId01));
+        when(uncorruptedActive.commitNeeded()).thenReturn(false);
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, tasks);
+        taskManager.handleRebalanceStart(singleton(topic1));
+
+        taskManager.handleCorruption(singleton(taskId00));
+
+        verify(uncorruptedActive, never()).closeDirty();
+        verify(uncorruptedActive, never()).addPartitionsForOffsetReset(any());
+        verify(corruptedActive).closeDirty();
+        verify(corruptedActive).addPartitionsForOffsetReset(taskId00Partitions);
+    }
+
+    @Test
+    public void shouldNotCloseAndReviveUncommittedTasksOnCorruptedStandbyTaskOnlyDuringRebalanceWithEOS() {
+        final StandbyTask corruptedStandby = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
+        final StreamTask uncorruptedActive = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.initializedTask(taskId00)).thenReturn(corruptedStandby);
+        when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(
+            mkEntry(taskId00, corruptedStandby),
+            mkEntry(taskId01, uncorruptedActive)
+        ));
+        when(tasks.activeInitializedTaskIds()).thenReturn(Set.of(taskId01));
+        lenient().when(uncorruptedActive.commitNeeded()).thenReturn(true);
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, tasks);
+        taskManager.handleRebalanceStart(singleton(topic1));
+
+        assertFalse(taskManager.handleCorruption(singleton(taskId00)));
+
+        verify(corruptedStandby).closeDirty();
+        verify(corruptedStandby).revive();
+        verify(uncorruptedActive, never()).prepareCommit(anyBoolean());
+        verify(uncorruptedActive, never()).closeDirty();
+        verify(uncorruptedActive, never()).addPartitionsForOffsetReset(any());
     }
 
     @Test
