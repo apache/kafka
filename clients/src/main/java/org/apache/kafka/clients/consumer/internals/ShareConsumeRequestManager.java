@@ -1268,7 +1268,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 // will have been released. Instead, these records will be re-delivered once they get timed out on the broker.
                 // If the topic or partition has been deleted, we do not retry the failed acknowledgements.
                 updateLeaderInfoMap(partitionData, partitionsWithUpdatedLeaderInfo, partitionError, tip);
-                metadata.requestUpdate(false);
             } else if (partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION || partitionError == Errors.UNKNOWN_TOPIC_ID) {
                 shareSessionLeaderMap.remove(tip);
                 shareSessionTopicIdMap.remove(tip.topicPartition());
@@ -1330,22 +1329,27 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
         } else {
             shareSessionLeaderMap.remove(tip);
+            metadata.requestUpdate(false);
         }
     }
 
     /**
      * Pass leadership information from broker redirects to the cluster metadata. The metadata only applies a redirect
      * whose leader epoch is strictly newer than the one it holds and whose leader it knows, so it can refuse a
-     * redirect which the share session leader cache has already accepted. When that happens, the cache and the
-     * metadata disagree about the leader, and the metadata may not even know the new leader's endpoint. A metadata
+     * redirect which the share session leader cache has already accepted. If the metadata already holds the same
+     * leader as the redirect, the two agree and nothing more is needed. Otherwise, the cache and the metadata
+     * disagree about the leader, and the metadata may not even know the new leader's endpoint. A metadata
      * refresh is requested so that the two converge, rather than waiting for the periodic refresh.
      */
     private void updatePartitionLeadership(Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeaders, List<Node> leaderNodes) {
         Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionLeaders, leaderNodes);
-        if (updatedPartitions.size() < partitionLeaders.size()) {
-            partitionLeaders.keySet().stream()
-                .filter(tp -> !updatedPartitions.contains(tp))
-                .forEach(tp -> log.debug("Requesting metadata update for partition {} since the metadata did not apply the leader {} from the broker",
+        List<TopicPartition> divergentPartitions = partitionLeaders.entrySet().stream()
+            .filter(e -> !updatedPartitions.contains(e.getKey()))
+            .filter(e -> !metadata.currentLeader(e.getKey()).leader.map(Node::id).equals(e.getValue().leaderId))
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toList());
+        if (!divergentPartitions.isEmpty()) {
+            divergentPartitions.forEach(tp -> log.debug("Requesting metadata update for partition {} since the metadata did not apply the leader {} from the broker",
                     tp, partitionLeaders.get(tp)));
             metadata.requestUpdate(false);
         }

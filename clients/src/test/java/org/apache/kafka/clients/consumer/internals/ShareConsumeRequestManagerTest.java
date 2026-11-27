@@ -2346,6 +2346,60 @@ public class ShareConsumeRequestManagerTest {
     }
 
     /**
+     * Test the scenario that ShareFetchResponse returns with an error indicating leadership change for the partition,
+     * along with new leader info (defined in KIP-951) which the metadata already holds. The metadata does not apply
+     * the leader from the response because it is not newer, but it already agrees, so there's no need to request
+     * an update.
+     */
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"FENCED_LEADER_EPOCH", "NOT_LEADER_OR_FOLLOWER"})
+    public void testNoMetadataUpdateWhenShareFetchResponseReturnsNewLeaderInformationAlreadyInMetadata(Errors error) {
+        buildRequestManager();
+
+        subscriptions.subscribe(Set.of(topicName));
+        subscriptions.assignFromSubscribed(Set.of(tp0, tp1));
+
+        client.updateMetadata(
+            RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
+                tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        Node tp0Leader = metadata.fetch().leaderFor(tp0);
+        Node tp1Leader = metadata.fetch().leaderFor(tp1);
+        assertEquals(nodeId0, tp0Leader);
+        assertEquals(nodeId1, tp1Leader);
+
+        assertEquals(2, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        // While the fetch is in flight, the metadata learns that the leadership of tp1 has moved onto node 0
+        metadata.updatePartitionLeadership(
+            Map.of(tp1, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId0.id()), Optional.of(validLeaderEpoch + 1))),
+            List.of(tp0Leader, tp1Leader));
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp1));
+        assertFalse(metadata.updateRequested());
+
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData =
+            buildPartitionDataMap(tip0, records, ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE, Errors.NONE);
+        client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId0);
+        partitionData = new LinkedHashMap<>();
+        partitionData.put(tip1,
+            new ShareFetchResponseData.PartitionData()
+                .setPartitionIndex(tip1.topicPartition().partition())
+                .setErrorCode(error.code())
+                .setCurrentLeader(new ShareFetchResponseData.LeaderIdAndEpoch()
+                    .setLeaderId(nodeId0.id())
+                    .setLeaderEpoch(validLeaderEpoch + 1)));
+        client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(nodeId0), 0), nodeId1);
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        // The leader from the broker is the one which the metadata already holds, so no metadata update is requested
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp1));
+        assertFalse(metadata.updateRequested());
+    }
+
+    /**
      * Test the scenario that the metadata indicated a change in leadership between ShareFetch requests such
      * as could occur when metadata is periodically updated. The metadata holds a newer leader epoch, so the
      * share consumer follows it without waiting for the former leader to redirect it.
@@ -3476,6 +3530,51 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
 
         assertTrue(metadata.updateRequested());
+        assertTrue(future.isDone());
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(error.exception().getClass(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException().getClass());
+    }
+
+    /**
+     * A ShareAcknowledge partition error which says the cached leader is wrong, and which carries new leader
+     * information that is applied to the metadata does not request a metadata refresh.
+     */
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"NOT_LEADER_OR_FOLLOWER", "FENCED_LEADER_EPOCH"})
+    public void testShareAcknowledgePartitionErrorWithLeaderInfoDoesNotRequestMetadataUpdate(Errors error) {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        subscriptions.subscribe(Set.of(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0));
+
+        client.updateMetadata(
+            RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 1),
+                tp -> validLeaderEpoch, topicIds, false));
+        Node oldLeader = metadata.fetch().leaderFor(tp0);
+        Node newLeader = metadata.fetch().nodeById(oldLeader.id() == 0 ? 1 : 0);
+        assertFalse(metadata.updateRequested());
+
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+        fetchRecords();
+
+        Acknowledgements acknowledgements = getAcknowledgements(1,
+            AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future =
+            shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(oldLeader.id(), acknowledgements)),
+                calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+        assertFalse(metadata.updateRequested());
+
+        // The acknowledgements fail with new leader information which is newer than the metadata.
+        client.prepareResponse(fullShareAcknowledgeResponse(tip0, error,
+            new ShareAcknowledgeResponseData.LeaderIdAndEpoch().setLeaderId(newLeader.id()).setLeaderEpoch(validLeaderEpoch + 1),
+            List.of(newLeader)));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The new leader has been applied to the metadata, so no further metadata update is requested.
+        assertEquals(newLeader, metadata.fetch().leaderFor(tp0));
+        assertFalse(metadata.updateRequested());
         assertTrue(future.isDone());
         assertEquals(1, completedAcknowledgements.size());
         assertEquals(error.exception().getClass(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException().getClass());
