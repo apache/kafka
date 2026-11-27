@@ -58,6 +58,8 @@
     <allow class="org.apache.kafka.raft.KRaftConfigs"/>
     <allow class="org.apache.kafka.test.TestUtils"/>
     <allow class="org.apache.kafka.jmh.util.BenchmarkConfigUtils"/>
+    <allow class="org.apache.kafka.jmh.assignor.AssignorBenchmarkUtils"/>
+    <allow class="org.apache.kafka.jmh.assignor.StreamsAssignorBenchmarkUtils"/>
     <allow pkg="joptsimple"/>
 
     <subpackage name="cache">
