@@ -99,7 +99,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 windows.gracePeriodMs(),
                 new KStreamSlidingWindowAggregate<>(windows, storeFactory, emitStrategy, aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
                 materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
+                new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()),
                 materializedInternal.valueSerde(),
                 false);
     }
@@ -147,7 +147,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 windows.gracePeriodMs(),
                 new KStreamSlidingWindowAggregate<>(windows, storeFactory, emitStrategy, aggregateBuilder.reduceInitializer, aggregatorFromReducer(reducer)),
                 materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
+                new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()),
                 materializedInternal.valueSerde(),
                 false);
     }
@@ -198,7 +198,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             windows.gracePeriodMs(),
             new KStreamSlidingWindowAggregate<>(windows, storeFactory, emitStrategy, initializer, aggregator),
             materializedInternal.queryableStoreName(),
-            materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
+            new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()),
             materializedInternal.valueSerde(),
             false);
     }

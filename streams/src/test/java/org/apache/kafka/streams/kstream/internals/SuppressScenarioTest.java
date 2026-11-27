@@ -63,6 +63,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Function;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
@@ -912,6 +913,141 @@ public class SuppressScenarioTest {
             .aggregate(() -> "", (k, v1, v2) -> "", Named.as("test"), Materialized.as("store"))
             .suppress(Suppressed.untilWindowCloses(unbounded()))
             .toStream();
+    }
+
+    // The following tests only configure the default serdes (no serde on Consumed/Grouped/Materialized), so the
+    // windowed key serde that suppress() uses has to be derived from the default key serde at runtime (KAFKA-9259).
+
+    @Test
+    public void shouldSupportFinalResultsForTimeWindowsWithDefaultSerdes() {
+        final List<TestRecord<String, Long>> results = finalResultsWithDefaultSerdes(
+            grouped -> grouped
+                .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(2L), ofMillis(1L)))
+                .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled()),
+            asList(
+                KeyValue.pair("k1", 0L), KeyValue.pair("k1", 1L), KeyValue.pair("k1", 2L), KeyValue.pair("k1", 1L),
+                KeyValue.pair("k1", 0L), KeyValue.pair("k1", 5L),
+                // dropped, because it is out of the grace period
+                KeyValue.pair("k1", 0L)
+            )
+        );
+        verify(
+            results,
+            asList(
+                new KeyValueTimestamp<>("[k1@0/2]", 4L, 1L),
+                new KeyValueTimestamp<>("[k1@2/4]", 1L, 2L)
+            )
+        );
+    }
+
+    @Test
+    public void shouldSupportFinalResultsForSlidingWindowsWithDefaultSerdes() {
+        final List<TestRecord<String, Long>> results = finalResultsWithDefaultSerdes(
+            grouped -> grouped
+                .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(5L), ofMillis(15L)))
+                .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled()),
+            asList(
+                KeyValue.pair("k1", 10L), KeyValue.pair("k1", 11L), KeyValue.pair("k1", 10L), KeyValue.pair("k1", 13L),
+                KeyValue.pair("k1", 10L), KeyValue.pair("k1", 24L),
+                // dropped, because the previous event advanced the stream time and closed the window
+                KeyValue.pair("k1", 5L), KeyValue.pair("k1", 7L),
+                // advances the stream time to flush the windows
+                KeyValue.pair("k1", 90L)
+            )
+        );
+        verify(
+            results,
+            asList(
+                new KeyValueTimestamp<>("[k1@5/10]", 5L, 10L),
+                new KeyValueTimestamp<>("[k1@6/11]", 5L, 11L),
+                new KeyValueTimestamp<>("[k1@8/13]", 5L, 13L),
+                new KeyValueTimestamp<>("[k1@11/16]", 2L, 13L),
+                new KeyValueTimestamp<>("[k1@12/17]", 1L, 13L),
+                new KeyValueTimestamp<>("[k1@19/24]", 1L, 24L)
+            )
+        );
+    }
+
+    @Test
+    public void shouldSupportFinalResultsForSessionWindowsWithDefaultSerdes() {
+        final List<TestRecord<String, Long>> results = finalResultsWithDefaultSerdes(
+            grouped -> grouped
+                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(5L)))
+                .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled()),
+            asList(
+                KeyValue.pair("k1", 0L), KeyValue.pair("k1", 5L), KeyValue.pair("k1", 1L),
+                // any record advances the stream time, whatever its key
+                KeyValue.pair("k2", 11L),
+                // dropped, because the first session is closed now
+                KeyValue.pair("k1", 5L),
+                // advances the stream time to flush the other sessions
+                KeyValue.pair("k1", 30L)
+            )
+        );
+        verify(
+            results,
+            asList(
+                new KeyValueTimestamp<>("[k1@0/5]", 3L, 5L),
+                new KeyValueTimestamp<>("[k2@11/11]", 1L, 11L)
+            )
+        );
+    }
+
+    @Test
+    public void shouldSupportFinalResultsForCogroupedTimeWindowsWithDefaultSerdes() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KGroupedStream<String, String> stream1 = builder.<String, String>stream("one").groupByKey();
+        final KGroupedStream<String, String> stream2 = builder.<String, String>stream("two").groupByKey();
+        stream1.cogroup((String key, String value, String aggregate) -> aggregate + value)
+            .cogroup(stream2, (key, value, aggregate) -> aggregate + value)
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(2L), ofMillis(1L)))
+            .aggregate(() -> "", Named.as("test"), Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store").withCachingDisabled())
+            .suppress(untilWindowCloses(unbounded()))
+            .toStream()
+            .map((final Windowed<String> k, final String v) -> new KeyValue<>(k.toString(), v))
+            .to("output-suppressed", Produced.with(STRING_SERDE, STRING_SERDE));
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(defaultSerdesConfig()).build()) {
+            driver.createInputTopic("one", STRING_SERIALIZER, STRING_SERIALIZER).pipeInput("k1", "a", 0L);
+            driver.createInputTopic("two", STRING_SERIALIZER, STRING_SERIALIZER).pipeInput("k1", "b", 1L);
+            // advances the stream time past the end of the first window plus its grace period
+            driver.createInputTopic("one", STRING_SERIALIZER, STRING_SERIALIZER).pipeInput("k2", "c", 5L);
+            verify(
+                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                singletonList(new KeyValueTimestamp<>("[k1@0/2]", "ab", 1L))
+            );
+        }
+    }
+
+    private Properties defaultSerdesConfig() {
+        final Properties defaultSerdesConfig = new Properties();
+        defaultSerdesConfig.putAll(config);
+        defaultSerdesConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        defaultSerdesConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        return defaultSerdesConfig;
+    }
+
+    /**
+     * Pipes the given (key, timestamp) records through {@code windowedCount} followed by {@code suppress(untilWindowCloses)}
+     * and returns what suppress emitted. No serde is set anywhere but in the default serde configs.
+     */
+    private List<TestRecord<String, Long>> finalResultsWithDefaultSerdes(
+        final Function<KGroupedStream<String, String>, KTable<Windowed<String>, Long>> windowedCount,
+        final List<KeyValue<String, Long>> keysAndTimestamps) {
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        windowedCount.apply(builder.<String, String>stream("input").groupByKey())
+            .suppress(untilWindowCloses(unbounded()))
+            .toStream()
+            .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+            .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(defaultSerdesConfig()).build()) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+            for (final KeyValue<String, Long> keyAndTimestamp : keysAndTimestamps) {
+                inputTopic.pipeInput(keyAndTimestamp.key, "v1", keyAndTimestamp.value);
+            }
+            return drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER);
+        }
     }
 
     private static <K, V> void verify(final List<TestRecord<K, V>> results,

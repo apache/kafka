@@ -17,13 +17,16 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -33,6 +36,8 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -45,6 +50,7 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -499,6 +505,27 @@ public class TimeWindowedKStreamImplTest {
     public void shouldThrowNullPointerOnCountIfMaterializedIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
         setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.count((Materialized<String, Long, WindowStore<Bytes, byte[]>>) null));
+    }
+
+    // Scenario: windowed aggregation with default serdes only, written to a topic without specifying a key serde.
+    // Expected: the default key serde gets wrapped into a time-windowed serde, like it does for explicit serdes,
+    // instead of failing with a ClassCastException (KAFKA-9259).
+    @Test
+    public void shouldWrapDefaultKeySerdeWhenWritingWindowedResultsToTopic() {
+        builder.<String, String>stream(TOPIC)
+            .groupByKey()
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L)))
+            .count()
+            .toStream()
+            .to("output", Produced.valueSerde(Serdes.Long()));
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+            driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer()).pipeInput("1", "1", 10L);
+            final TestOutputTopic<Windowed<String>, Long> output = driver.createOutputTopic(
+                "output", new TimeWindowedDeserializer<>(new StringDeserializer(), 500L), new LongDeserializer());
+
+            assertEquals(new KeyValue<>(KEY_1_WINDOW_0, 1L), output.readKeyValue());
+        }
     }
 
     private void processData(final TopologyTestDriver driver) {

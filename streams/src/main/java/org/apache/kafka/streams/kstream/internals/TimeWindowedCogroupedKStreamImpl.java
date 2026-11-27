@@ -90,9 +90,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
             initializer,
             new NamedInternal(named),
             new WindowStoreMaterializer<>(materializedInternal, windows, EmitStrategy.onWindowUpdate()),
-            materializedInternal.keySerde() != null ?
-                new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())
-                : null,
+            new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()),
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
             windows);
