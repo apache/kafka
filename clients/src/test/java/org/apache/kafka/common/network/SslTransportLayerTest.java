@@ -1039,7 +1039,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
             true, securityProtocol, config, null, null, TIME, new LogContext(),
-            defaultApiVersionsSupplier());
+            defaultApiVersionsSupplier(), true);
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, TIME);
         server.start();
@@ -1063,7 +1063,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         assertThrows(KafkaException.class, () -> ChannelBuilders.serverChannelBuilder(
             listenerName, true, securityProtocol, config,
-            null, null, TIME, new LogContext(), defaultApiVersionsSupplier()));
+            null, null, TIME, new LogContext(), defaultApiVersionsSupplier(), true));
     }
 
     /**
@@ -1078,7 +1078,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
             false, securityProtocol, config, null, null, TIME, new LogContext(),
-            defaultApiVersionsSupplier());
+            defaultApiVersionsSupplier(), true);
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, TIME);
         server.start();
@@ -1139,7 +1139,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
             false, securityProtocol, config, null, null, TIME, new LogContext(),
-            defaultApiVersionsSupplier());
+            defaultApiVersionsSupplier(), true);
         server = new NioEchoServer(listenerName, securityProtocol, config,
             "localhost", serverChannelBuilder, null, TIME);
         server.start();
@@ -1205,7 +1205,7 @@ public class SslTransportLayerTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
             false, securityProtocol, config, null, null, TIME, new LogContext(),
-            defaultApiVersionsSupplier());
+            defaultApiVersionsSupplier(), true);
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, TIME);
         server.start();

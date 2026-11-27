@@ -80,6 +80,7 @@ import javax.security.sasl.SaslServer;
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -158,6 +159,28 @@ public class SaslServerAuthenticatorTest {
 
         assertThrows(InvalidRequestException.class, authenticator::authenticate);
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
+    }
+
+    @Test
+    public void testSaslAuthenticateWithDisabledApiVersion() throws IOException {
+        String mechanism = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+        try (
+            MockedStatic<?> ignored = Mockito.mockStatic(Sasl.class, (Answer<SaslServer>) invocation -> mock(SaslServer.class));
+            TransportLayer transportLayer = mockTransportLayer()
+        ) {
+            Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+                    Collections.singletonList(mechanism));
+            SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, mechanism,
+                    new DefaultChannelMetadataRegistry(), new MockTime(), null, false);
+
+            mockRequest(saslHandshakeRequest(mechanism), transportLayer);
+            authenticator.authenticate();
+
+            assertTrue(ApiKeys.SASL_AUTHENTICATE.messageType.latestVersionUnstable());
+            mockRequest(saslAuthenticateRequest(), transportLayer);
+            Throwable e = assertThrows(InvalidRequestException.class, authenticator::authenticate);
+            assertTrue(e.getMessage().contains("disabled api"));
+        }
     }
 
     @Test
@@ -304,7 +327,7 @@ public class SaslServerAuthenticatorTest {
                 Collections.singletonList(mechanism));
         ChannelMetadataRegistry metadataRegistry = new DefaultChannelMetadataRegistry();
 
-        return setupAuthenticator(configs, transportLayer, mechanism, metadataRegistry, time, maxReauth);
+        return setupAuthenticator(configs, transportLayer, mechanism, metadataRegistry, time, maxReauth, true);
     }
 
     private MockedStatic<?> mockSaslServer(SaslServer saslServer, String mechanism, Time time, Duration tokenExpirationDuration) throws SaslException {
@@ -420,24 +443,25 @@ public class SaslServerAuthenticatorTest {
 
     private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs, TransportLayer transportLayer,
                                                        String mechanism, ChannelMetadataRegistry metadataRegistry) {
-        return setupAuthenticator(configs, transportLayer, mechanism, metadataRegistry, new MockTime(), null);
+        return setupAuthenticator(configs, transportLayer, mechanism, metadataRegistry, new MockTime(), null, true);
     }
 
     private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs, TransportLayer transportLayer,
-                                                       String mechanism, ChannelMetadataRegistry metadataRegistry, Time time, Long maxReauth) {
+                                                       String mechanism, ChannelMetadataRegistry metadataRegistry, Time time, Long maxReauth,
+                                                       boolean enableUnstableLastVersion) {
         TestJaasConfig jaasConfig = new TestJaasConfig();
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<>());
         Map<String, Subject> subjects = Collections.singletonMap(mechanism, new Subject());
         Map<String, AuthenticateCallbackHandler> callbackHandlers = Collections.singletonMap(
                 mechanism, new SaslServerCallbackHandler());
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
-                ApiMessageType.ListenerType.BROKER);
+                0, ApiMessageType.ListenerType.BROKER, enableUnstableLastVersion);
         Map<String, Long> connectionsMaxReauthMsByMechanism = maxReauth != null ?
                 Collections.singletonMap(mechanism, maxReauth) : Collections.emptyMap();
 
         return new SaslServerAuthenticator(configs, callbackHandlers, "node", subjects, null,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, connectionsMaxReauthMsByMechanism,
-                metadataRegistry, time, version -> apiVersionsResponse);
+                metadataRegistry, time, version -> apiVersionsResponse, enableUnstableLastVersion);
     }
 
 }

@@ -2123,7 +2123,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
-                credentialCache, null, null, time, new LogContext(), apiVersionSupplier);
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, true);
 
         serverChannelBuilder.configure(saslServerConfigs);
         server = new NioEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs),
@@ -2160,7 +2160,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
-                credentialCache, null, null, time, new LogContext(), apiVersionSupplier) {
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, true) {
             @Override
             protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
                                                                        Map<String, AuthenticateCallbackHandler> callbackHandlers,
@@ -2170,7 +2170,7 @@ public class SaslAuthenticatorTest {
                                                                        Map<String, Long> connectionsMaxReauthMsByMechanism,
                                                                        ChannelMetadataRegistry metadataRegistry) {
                 return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects, null, listenerName,
-                    securityProtocol, transportLayer, connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier) {
+                    securityProtocol, transportLayer, connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier, true) {
                     @Override
                     protected void enableKafkaSaslAuthenticateHeaders(boolean flag) {
                         // Don't enable Kafka SASL_AUTHENTICATE headers
@@ -2201,7 +2201,7 @@ public class SaslAuthenticatorTest {
         };
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER,
                 Collections.singletonMap(saslMechanism, jaasContext), securityProtocol, listenerName, false, saslMechanism,
-                credentialCache, null, null, time, new LogContext(), apiVersionSupplier);
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, true);
         serverChannelBuilder.configure(saslServerConfigs);
         server = new NioEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs),
                 "localhost", serverChannelBuilder, credentialCache, time);
@@ -2217,7 +2217,7 @@ public class SaslAuthenticatorTest {
     ) {
         return new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
-                null, null, null, time, new LogContext(), null) {
+                null, null, null, time, new LogContext(), null, true) {
 
             @Override
             protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
@@ -2263,7 +2263,7 @@ public class SaslAuthenticatorTest {
         } else {
             clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
-                null, null, null, time, new LogContext(), null) {
+                null, null, null, time, new LogContext(), null, true) {
 
                 @Override
                 protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
@@ -2429,7 +2429,7 @@ public class SaslAuthenticatorTest {
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism,
                 JaasContext.loadClientContext(Collections.emptyMap()));
         SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
-                securityProtocol, null, false, saslMechanism, null, null, null, time, new LogContext(), null) {
+                securityProtocol, null, false, saslMechanism, null, null, null, time, new LogContext(), null, true) {
             @Override
             protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
                                                                        AuthenticateCallbackHandler callbackHandler,
@@ -2880,7 +2880,7 @@ public class SaslAuthenticatorTest {
                 DelegationTokenCache tokenCache, Time time) {
             super(connectionMode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
                 credentialCache, tokenCache, null, time, new LogContext(),
-                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER));
+                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER), true);
         }
 
         @Override
