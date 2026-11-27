@@ -3068,6 +3068,79 @@ public class SharePartitionManagerTest {
     }
 
     @Test
+    public void testShareGroupListenerReleasesAcquiredRecordsOnGenuineMemberLeave() {
+        String groupId = "grp";
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        String memberId = Uuid.randomUuid().toString();
+
+        SharePartition sp0 = mock(SharePartition.class);
+        when(sp0.releaseAcquiredRecords(memberId)).thenReturn(CompletableFuture.completedFuture(null));
+
+        ImplicitLinkedHashCollection<CachedSharePartition> partitionMap = new ImplicitLinkedHashCollection<>();
+        partitionMap.add(new CachedSharePartition(tp0, false));
+
+        ShareSessionCache cache = new ShareSessionCache(10);
+        cache.maybeCreateSession(groupId, memberId, partitionMap, CONNECTION_ID);
+
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        partitionCache.computeIfAbsent(new SharePartitionKey(groupId, tp0), k -> sp0);
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .withPartitionCache(partitionCache)
+            .withReplicaManager(mockReplicaManager)
+            .build();
+
+        assertEquals(1, cache.size());
+
+        // Simulate a genuine disconnect (the member never reconnected): its acquired records must be released.
+        cache.connectionDisconnectListener().onDisconnect(CONNECTION_ID);
+
+        assertEquals(0, cache.size());
+        Mockito.verify(sp0, times(1)).releaseAcquiredRecords(memberId);
+    }
+
+    @Test
+    public void testShareGroupListenerSkipsReleaseWhenSessionAlreadyReplacedByReconnect() {
+        String groupId = "grp";
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        String memberId = Uuid.randomUuid().toString();
+
+        SharePartition sp0 = mock(SharePartition.class);
+        when(sp0.releaseAcquiredRecords(memberId)).thenReturn(CompletableFuture.completedFuture(null));
+
+        ImplicitLinkedHashCollection<CachedSharePartition> partitionMap = new ImplicitLinkedHashCollection<>();
+        partitionMap.add(new CachedSharePartition(tp0, false));
+
+        ShareSessionCache cache = new ShareSessionCache(10);
+        cache.maybeCreateSession(groupId, memberId, partitionMap, CONNECTION_ID);
+
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        partitionCache.computeIfAbsent(new SharePartitionKey(groupId, tp0), k -> sp0);
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .withPartitionCache(partitionCache)
+            .withReplicaManager(mockReplicaManager)
+            .build();
+
+        // Simulate the member reconnecting on a new connection before the broker processes the old
+        // connection's disconnect (e.g. disconnect detection lagged behind the reconnect).
+        ImplicitLinkedHashCollection<CachedSharePartition> newPartitionMap = new ImplicitLinkedHashCollection<>();
+        newPartitionMap.add(new CachedSharePartition(tp0, false));
+        cache.remove(new ShareSessionKey(groupId, memberId));
+        cache.maybeCreateSession(groupId, memberId, newPartitionMap, "new-connection");
+
+        // The disconnect notification for the OLD connection now arrives.
+        cache.connectionDisconnectListener().onDisconnect(CONNECTION_ID);
+
+        // The reconnected member's session and acquired records must be left untouched.
+        assertEquals(1, cache.size());
+        assertNotNull(cache.get(new ShareSessionKey(groupId, memberId)));
+        Mockito.verify(sp0, times(0)).releaseAcquiredRecords(memberId);
+    }
+
+    @Test
     public void testShareGroupListenerWithEmptyCache() {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));

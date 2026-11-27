@@ -182,7 +182,7 @@ public class ShareSessionCacheTest {
         assertTrue(cache.connectionSessionKeyAndState("conn-1").stale());
         assertFalse(cache.connectionSessionKeyAndState("conn-2").stale());
 
-        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1);
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1, "conn-1");
         Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(groupId);
         // Verify member count is updated
         assertEquals(1, cache.numMembers(groupId));
@@ -196,16 +196,16 @@ public class ShareSessionCacheTest {
         // Simulate connection disconnect for memberId1.
         cache.connectionDisconnectListener().onDisconnect("conn-1");
         // Verify only member leave event is triggered for memberId1. Empty group event should not be triggered.
-        Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId, memberId1);
-        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId2);
+        Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId, memberId1, "conn-1");
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId2, "conn-2");
         Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(groupId);
         assertEquals(1, cache.numMembers(groupId));
 
         // Simulate connection disconnect for memberId2.
         cache.connectionDisconnectListener().onDisconnect("conn-2");
         // Verify both member leave event and empty group event should be triggered.
-        Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId, memberId1);
-        Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId, memberId2);
+        Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId, memberId1, "conn-1");
+        Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId, memberId2, "conn-2");
         Mockito.verify(mockListener, Mockito.times(1)).onGroupEmpty(groupId);
         assertNull(cache.numMembers(groupId));
     }
@@ -232,10 +232,10 @@ public class ShareSessionCacheTest {
 
         // Remove session for group1 and verify listeners are only called for group1.
         cache.connectionDisconnectListener().onDisconnect("conn-1");
-        Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId1, memberId1);
+        Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId1, memberId1, "conn-1");
         Mockito.verify(mockListener, Mockito.times(1)).onGroupEmpty(groupId1);
         // Listener should not be called for group2.
-        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId2, memberId2);
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId2, memberId2, "conn-2");
         Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(groupId2);
         // Verify member count is updated.
         assertNull(cache.numMembers(groupId1));
@@ -262,7 +262,7 @@ public class ShareSessionCacheTest {
         cache.remove(key1);
         // Session should be marked stale only for memberId1.
         assertTrue(cache.connectionSessionKeyAndState("conn-1").stale());
-        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1);
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1, "conn-1");
         Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(groupId);
         // Verify member count is updated
         assertEquals(0, cache.numMembers(groupId));
@@ -271,8 +271,63 @@ public class ShareSessionCacheTest {
         cache.connectionDisconnectListener().onDisconnect("conn-1");
         // Verify only group empty event is triggered. Member leave event should not be triggered
         // as session was already removed and marked stale.
-        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1);
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1, "conn-1");
         Mockito.verify(mockListener, Mockito.times(1)).onGroupEmpty(groupId);
+    }
+
+    @Test
+    public void testRemoveIfConnectionMatches() {
+        ShareSessionCache cache = new ShareSessionCache(3);
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+        ShareSessionKey key = cache.maybeCreateSession(groupId, memberId, mockedSharePartitionMap(1), "conn-1");
+        assertNotNull(key);
+
+        // A connection id that does not own the current session must not remove it.
+        assertNull(cache.removeIfConnectionMatches(key, "conn-2"));
+        assertNotNull(cache.get(key));
+
+        // A key with no session present is a no-op.
+        assertNull(cache.removeIfConnectionMatches(new ShareSessionKey(groupId, Uuid.randomUuid().toString()), "conn-1"));
+
+        // The owning connection id can remove the session.
+        assertNotNull(cache.removeIfConnectionMatches(key, "conn-1"));
+        assertNull(cache.get(key));
+    }
+
+    @Test
+    public void testMemberLeaveNotificationDoesNotEvictSessionReplacedDuringNotification() {
+        ShareGroupListener mockListener = Mockito.mock(ShareGroupListener.class);
+        ShareSessionCache cache = new ShareSessionCache(3);
+        cache.registerShareGroupListener(mockListener);
+
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+        ShareSessionKey key = cache.maybeCreateSession(groupId, memberId, mockedSharePartitionMap(1), "conn-old");
+        assertNotNull(key);
+
+        // Simulate the member reconnecting on a new connection, and the broker replacing the session at
+        // the same key, in the window between the cache reading the old session and acting on its
+        // removal. The listener callback below (triggered by the old connection's disconnect) stands in
+        // for that concurrent reconnect.
+        Mockito.doAnswer(invocation -> {
+            cache.remove(key);
+            cache.maybeCreateSession(groupId, memberId, mockedSharePartitionMap(5), "conn-new");
+            return null;
+        }).when(mockListener).onMemberLeave(groupId, memberId, "conn-old");
+
+        // Trigger the disconnect notification for the OLD connection.
+        cache.connectionDisconnectListener().onDisconnect("conn-old");
+
+        // The listener was notified for the old connection...
+        Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId, memberId, "conn-old");
+        // ...but the session installed by the reconnect during that notification must survive: the
+        // trailing fallback removal in the cache must not evict it, since it belongs to a different,
+        // still-live connection.
+        ShareSession currentSession = cache.get(key);
+        assertNotNull(currentSession);
+        assertEquals("conn-new", currentSession.connectionId());
+        assertEquals(5, currentSession.size());
     }
 
     @Test

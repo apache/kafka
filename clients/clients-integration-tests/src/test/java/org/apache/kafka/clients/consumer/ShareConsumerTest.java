@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import kafka.server.BrokerServer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -56,6 +58,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.share.session.ShareSessionCache;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Timeout;
@@ -2067,6 +2070,79 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             shareConsumer1.close();
             shareConsumer2.close();
         }
+    }
+
+    @ClusterTest(
+        serverProperties = {
+            // Close idle connections quickly so that the connection of a share consumer which stops polling is
+            // closed by the broker, which is how the broker observes a client disconnect.
+            @ClusterConfigProperty(key = "connections.max.idle.ms", value = "3000"),
+            // Keep heartbeats more frequent than the idle timeout so that only the share fetch connection goes idle.
+            @ClusterConfigProperty(key = "group.share.heartbeat.interval.ms", value = "1000"),
+            @ClusterConfigProperty(key = "group.share.min.heartbeat.interval.ms", value = "1000"),
+            // Long record lock so that a re-delivery within the test can only be due to the release on disconnect.
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "60000")
+        }
+    )
+    public void testShareSessionEvictedAndAcquiredRecordsReleasedOnClientDisconnect() throws Exception {
+        String groupId = "group1";
+        alterShareAutoOffsetReset(groupId, "earliest");
+        assertEquals(1, cluster.brokers().size());
+        ShareSessionCache shareSessionCache = ((BrokerServer) cluster.brokers().get(0)).sharePartitionManager().shareSessionCache();
+        assertEquals(0, shareSessionCache.size());
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
+            producer.send(new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes()));
+            producer.flush();
+
+            Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
+            Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
+            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals(0, records.iterator().next().offset());
+            // The share session for the member is established on the broker.
+            assertEquals(1, shareSessionCache.size());
+            assertEquals(1, shareSessionCache.numMembers(groupId));
+
+            // The record is left acquired, as it is only acknowledged on the next poll, and the consumer stops
+            // polling, hence no share fetch requests are sent and the broker closes the idle connection. The broker
+            // must evict the share session on the disconnect and leave no members for the group in the cache.
+            waitForCondition(() -> shareSessionCache.size() == 0 && shareSessionCache.numMembers(groupId) == null,
+                DEFAULT_MAX_WAIT_MS, "Share session was not evicted on client disconnect");
+
+            // The next poll implicitly acknowledges the delivered record, but the acknowledgement is sent with a
+            // share fetch for a session the broker has already evicted, hence it fails and the consumer establishes
+            // a new share session. The acquired record must have been released on the disconnect, hence it is
+            // redelivered over the new share session.
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals(0, records.iterator().next().offset());
+            assertEquals(1, shareSessionCache.size());
+            assertEquals(1, shareSessionCache.numMembers(groupId));
+
+            // The acknowledgement sent for the evicted share session must be failed, which is reported through the
+            // acknowledgement commit callback invoked from poll. The failure is either a DisconnectException, if the
+            // share fetch carrying the acknowledgement was sent over the connection closed by the broker, or a
+            // NetworkException, if the consumer had already noticed the closed connection and the broker responded
+            // with a share session not found error over the new connection.
+            waitForCondition(() -> {
+                if (!partitionExceptionMap.containsKey(tp)) {
+                    shareConsumer.poll(Duration.ofMillis(500));
+                }
+                return partitionExceptionMap.containsKey(tp);
+            }, DEFAULT_MAX_WAIT_MS, "Acknowledgement for the evicted share session was not failed");
+            Exception ackException = partitionExceptionMap.get(tp);
+            assertTrue(ackException instanceof DisconnectException || ackException instanceof NetworkException,
+                "Unexpected acknowledgement failure: " + ackException);
+            assertTrue(partitionOffsetsMap.get(tp).contains(0L));
+        }
+        // Closing the consumer releases the share session with the final epoch, which also leaves no members.
+        assertEquals(0, shareSessionCache.size());
+        assertNull(shareSessionCache.numMembers(groupId));
     }
 
     @ClusterTest
