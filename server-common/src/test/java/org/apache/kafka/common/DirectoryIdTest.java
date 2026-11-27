@@ -18,9 +18,8 @@ package org.apache.kafka.common;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -68,22 +67,21 @@ public class DirectoryIdTest {
     @Test
     void testIsOnline() {
         // Given
-        List<Uuid> sortedDirs = new ArrayList<>(List.of(
+        Set<Uuid> dirs = Set.of(
             Uuid.fromString("imQKg2cXTVe8OUFNa3R9bg"),
             Uuid.fromString("Mwy5wxTDQxmsZwGzjsaX7w"),
             Uuid.fromString("s8rHMluuSDCnxt3FmKwiyw")
-        ));
-        sortedDirs.sort(Uuid::compareTo);
-        List<Uuid> emptySortedDirs = List.of();
+        );
+        Set<Uuid> emptyDirs = Set.of();
 
         // When/Then
-        assertTrue(DirectoryId.isOnline(Uuid.fromString("imQKg2cXTVe8OUFNa3R9bg"), sortedDirs));
-        assertTrue(DirectoryId.isOnline(Uuid.fromString("Mwy5wxTDQxmsZwGzjsaX7w"), sortedDirs));
-        assertTrue(DirectoryId.isOnline(Uuid.fromString("s8rHMluuSDCnxt3FmKwiyw"), sortedDirs));
-        assertTrue(DirectoryId.isOnline(DirectoryId.MIGRATING, sortedDirs));
-        assertTrue(DirectoryId.isOnline(DirectoryId.UNASSIGNED, sortedDirs));
-        assertFalse(DirectoryId.isOnline(DirectoryId.LOST, sortedDirs));
-        assertFalse(DirectoryId.isOnline(Uuid.fromString("AMYchbMtS6yhtsXbca7DQg"), sortedDirs));
-        assertTrue(DirectoryId.isOnline(Uuid.randomUuid(), emptySortedDirs));
+        assertTrue(DirectoryId.isOnline(Uuid.fromString("imQKg2cXTVe8OUFNa3R9bg"), dirs));
+        assertTrue(DirectoryId.isOnline(Uuid.fromString("Mwy5wxTDQxmsZwGzjsaX7w"), dirs));
+        assertTrue(DirectoryId.isOnline(Uuid.fromString("s8rHMluuSDCnxt3FmKwiyw"), dirs));
+        assertTrue(DirectoryId.isOnline(DirectoryId.MIGRATING, dirs));
+        assertTrue(DirectoryId.isOnline(DirectoryId.UNASSIGNED, dirs));
+        assertFalse(DirectoryId.isOnline(DirectoryId.LOST, dirs));
+        assertFalse(DirectoryId.isOnline(Uuid.fromString("AMYchbMtS6yhtsXbca7DQg"), dirs));
+        assertTrue(DirectoryId.isOnline(Uuid.randomUuid(), emptyDirs));
     }
 }
