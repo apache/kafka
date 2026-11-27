@@ -36,6 +36,7 @@ import java.util.function.Supplier;
  * @see Transformer
  * @see TransformerSupplier
  */
+@Deprecated
 @FunctionalInterface
 @InterfaceAudience.Public
 public interface ValueTransformerWithKeySupplier<K, V, VR> extends ConnectedStoreProvider, Supplier<ValueTransformerWithKey<K, V, VR>> {
