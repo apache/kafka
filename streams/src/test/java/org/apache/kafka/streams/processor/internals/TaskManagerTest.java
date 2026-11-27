@@ -23,21 +23,30 @@ import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
+import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.streams.TopologyConfig;
+import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -50,9 +59,11 @@ import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTask;
 import org.apache.kafka.streams.processor.internals.Task.State;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,6 +73,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -80,6 +92,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -116,6 +129,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -2659,6 +2673,99 @@ public class TaskManagerTest {
         verify(corruptedActive).postCommit(true);
         verify(corruptedActive).addPartitionsForOffsetReset(taskId00Partitions);
         verify(consumer, never()).commitSync(emptyMap());
+    }
+
+    @ParameterizedTest(name = "rebalanceInProgress={0}")
+    @ValueSource(booleans = {false, true})
+    public void shouldPreserveOrResetHealthyTaskOutputsOnCorruption(final boolean rebalanceInProgress) {
+        final StreamTask corruptedTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING)
+            .build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.initializedTask(taskId00)).thenReturn(corruptedTask);
+        when(tasks.activeInitializedTaskIds()).thenReturn(Set.of(taskId00, taskId01));
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
+
+        try (final Metrics metrics = new Metrics();
+             final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(true, null, new ByteArraySerializer(), new ByteArraySerializer())) {
+            final LogContext logContext = new LogContext("corruption-rebalance-test ");
+            final StreamsProducer producer = new StreamsProducer(mockProducer, ProcessingMode.EXACTLY_ONCE_V2, time, logContext);
+            final MockStreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
+            final RecordCollectorImpl corruptedCollector = new RecordCollectorImpl(
+                logContext,
+                taskId00,
+                producer,
+                new DefaultProductionExceptionHandler(),
+                streamsMetrics,
+                mock(ProcessorTopology.class)
+            );
+            corruptedCollector.initialize();
+            doAnswer(invocation -> {
+                corruptedCollector.closeDirty();
+                return null;
+            }).when(corruptedTask).closeDirty();
+
+            final DummyStreamsConfig config = new DummyStreamsConfig(ProcessingMode.EXACTLY_ONCE_V2);
+            final InternalTopologyBuilder builder = new InternalTopologyBuilder();
+            builder.addSource(null, "source", null, new ByteArrayDeserializer(), new ByteArrayDeserializer(), topic1);
+            builder.addSink("sink", "repartition", new ByteArraySerializer(), new ByteArraySerializer(), null, "source");
+            final ProcessorTopology topology = builder.rewriteTopology(config).buildTopology();
+            final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
+            when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+            final ThreadCache cache = new ThreadCache(logContext, 0, streamsMetrics);
+            final RecordCollectorImpl healthyCollector = new RecordCollectorImpl(
+                logContext, taskId01, producer, new DefaultProductionExceptionHandler(), streamsMetrics, topology
+            );
+            final StreamTask healthyTask = new StreamTask(
+                taskId01, taskId01Partitions, topology, consumer,
+                new TopologyConfig(null, config, new Properties()).getTaskConfig(),
+                streamsMetrics, stateDirectory, cache, time, stateManager, healthyCollector,
+                new ProcessorContextImpl(taskId01, config, stateManager, streamsMetrics, cache), logContext, false
+            );
+            healthyTask.initializeIfNeeded();
+            healthyTask.completeRestoration(noOpResetter);
+            when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(
+                mkEntry(taskId00, corruptedTask), mkEntry(taskId01, healthyTask)
+            ));
+            when(activeTaskCreator.streamsProducer()).thenReturn(producer);
+            final ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
+            // only used when offsets are committed, which a fix may avoid by resetting the healthy task instead
+            lenient().when(groupMetadata.groupId()).thenReturn("test-group");
+            lenient().when(consumer.groupMetadata()).thenReturn(groupMetadata);
+
+            // Process real inputs so the task's committable offset comes from its own progress.
+            healthyTask.addRecords(t1p1, List.of(
+                new ConsumerRecord<>(topic1, 1, 0L, 0L, TimestampType.CREATE_TIME,
+                    1, 1, new byte[]{0}, new byte[]{0}, new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(topic1, 1, 1L, 1L, TimestampType.CREATE_TIME,
+                    1, 1, new byte[]{1}, new byte[]{1}, new RecordHeaders(), Optional.empty())
+            ));
+            healthyTask.updateNextOffsets(t1p1, new OffsetAndMetadata(2L));
+            assertTrue(healthyTask.process(time.milliseconds()));
+            assertTrue(healthyTask.process(time.milliseconds()));
+            assertEquals(2, mockProducer.uncommittedRecords().size());
+            assertTrue(mockProducer.history().isEmpty());
+            final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, tasks);
+            if (rebalanceInProgress) {
+                taskManager.handleRebalanceStart(Set.of(topic1));
+            }
+
+            assertTrue(taskManager.handleCorruption(Set.of(taskId00)));
+            verify(corruptedTask).closeDirty();
+            if (rebalanceInProgress) {
+                taskManager.handleRebalanceComplete();
+            }
+            taskManager.commit(Set.of(healthyTask));
+
+            // one output per input, starting at offset 0: committing input offset N requires N committed outputs
+            final long committedInputOffset = mockProducer.consumerGroupOffsetsHistory().stream()
+                .mapToLong(offsets -> offsets.get("test-group").get(t1p1).offset())
+                .max()
+                .orElse(0L);
+            assertEquals(committedInputOffset, mockProducer.history().size(),
+                "Committed input offset " + committedInputOffset + " without the outputs of those inputs");
+        }
     }
 
     @Test
