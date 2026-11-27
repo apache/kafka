@@ -82,11 +82,13 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_L
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.generateAssignment;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyTopicThrottles;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.verifyAssignment;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(brokers = 5, disksPerBroker = 3, serverProperties = {
@@ -498,6 +500,29 @@ public class ReassignPartitionsCommandTest {
                             "foo-0: The replication factor is changed from 3 to 2\n" +
                             "foo-1: The replication factor is changed from 3 to 4",
                     assertThrows(TerseException.class, () -> executeAssignment(admin, false, assignment, -1L, -1L, 10000L, Time.SYSTEM, true)).getMessage());
+        }
+    }
+
+    /**
+     * Test that a throttled replica list exceeding the max config value size falls back to the wildcard
+     * instead of failing to serialize the request.
+     */
+    @ClusterTest
+    public void testModifyTopicThrottlesWithTooLongThrottledReplicaList() throws Exception {
+        createTopics();
+        String tooLongThrottle = IntStream.range(0, 5000)
+            .mapToObj(partition -> partition + ":0")
+            .collect(Collectors.joining(","));
+        try (Admin admin = clusterInstance.admin()) {
+            assertTimeoutPreemptively(Duration.ofSeconds(30), () ->
+                modifyTopicThrottles(admin, Map.of("foo", tooLongThrottle), Map.of("foo", "0:3")));
+
+            ConfigResource resource = new ConfigResource(TOPIC, "foo");
+            TestUtils.waitForCondition(() -> {
+                Config config = assertDoesNotThrow(() -> admin.describeConfigs(List.of(resource)).all().get().get(resource));
+                return "*".equals(config.get(LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG).value()) &&
+                    "0:3".equals(config.get(FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG).value());
+            }, "timed out waiting for the topic throttles to be updated");
         }
     }
 
