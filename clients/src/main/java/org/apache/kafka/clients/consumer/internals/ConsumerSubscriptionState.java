@@ -48,7 +48,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -115,8 +114,7 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
     private final AutoOffsetResetStrategy defaultResetStrategy;
 
     /* Current listener context to trigger rebalance listener callbacks. Nonnull - defaults to NULL_LISTENER. */
-    private final AtomicReference<ListenerContext> listenerContext =
-            new AtomicReference<>(ListenerContext.NULL_LISTENER);
+    private ListenerContext listenerContext = ListenerContext.NULL_LISTENER;
 
     private int assignmentId = 0;
 
@@ -323,16 +321,6 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
     }
 
     /**
-     * Visible for tests only. Used when a consumer instance is unavailable for registration such as in simple
-     * tests or membership management.
-     * @param listener the listener; must not be null
-     */
-    public synchronized void setRebalanceListener(RebalanceListener listener) {
-        Objects.requireNonNull(listener, "Listener must not be null when setting a rebalance listener");
-        this.listenerContext.set(new ListenerContext(listener));
-    }
-
-    /**
      * Sets the current rebalance listener for this subscription.
      * @param listener the listener
      * @param consumer the consumer instance to orchestrate callbacks in {@link RebalanceConsumer}. must not be null
@@ -340,9 +328,9 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
     public synchronized void setRebalanceListener(RebalanceListener listener, Consumer<?, ?> consumer) {
         if (listener != null) {
             Objects.requireNonNull(consumer, "Consumer must not be null when a listener is provided");
-            this.listenerContext.set(new ListenerContext(listener, consumer));
+            this.listenerContext = new ListenerContext(listener, consumer);
         } else {
-            this.listenerContext.set(ListenerContext.NULL_LISTENER);
+            this.listenerContext = ListenerContext.NULL_LISTENER;
         }
     }
 
@@ -1025,16 +1013,16 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
 
     /** @return true if a {@link RebalanceListener} has been registered with this subscription. */
     public synchronized boolean hasRebalanceListener() {
-        return listenerContext.get().rebalanceListener != null;
+        return listenerContext.rebalanceListener != null;
     }
 
     public synchronized Optional<String> listenerName() {
-        return Optional.ofNullable(listenerContext.get().rebalanceListener)
+        return Optional.ofNullable(listenerContext.rebalanceListener)
                 .map(listener -> listener.getClass().getName());
     }
 
     private synchronized ListenerContext listenerContext() {
-        return listenerContext.get();
+        return listenerContext;
     }
 
     /** Invoke {@link RebalanceListener#onPartitionsAssigned(Collection, RebalanceConsumer)} on the given partitions.*/
@@ -1081,17 +1069,12 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
     }
 
     private static class ListenerContext {
-        private static final ListenerContext NULL_LISTENER = new ListenerContext(null);
+        private static final ListenerContext NULL_LISTENER = new ListenerContext(null, null);
 
         /** User-provided listener to be invoked when assignment changes */
         private final RebalanceListener rebalanceListener;
         /** The consumer that last registered a RebalanceListener via {@link Consumer#setRebalanceListener(RebalanceListener)}. */
         private final Consumer<?, ?> consumer;
-
-        private ListenerContext(RebalanceListener listener) {
-            this.rebalanceListener = listener;
-            this.consumer = null;
-        }
 
         private ListenerContext(RebalanceListener listener, Consumer<?, ?> consumer) {
             this.rebalanceListener = listener;
