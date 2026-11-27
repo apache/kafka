@@ -43,7 +43,7 @@ public class TopicImageNodeTest {
             setDirectories(DirectoryId.migratingArray(3)).
             setIsr(new int[] {2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
 
-    private static final TopicImageNode MIRROR_NODE = new TopicImageNode(newTopicImage("topic-image-node-test-topic", Uuid.ZERO_UUID, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.STOPPED.value()), new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).
+    private static final TopicImageNode MIRROR_NODE = new TopicImageNode(newTopicImage("topic-image-node-test-topic", Uuid.ZERO_UUID, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.STOPPED), new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).
             setDirectories(DirectoryId.migratingArray(3)).
             setIsr(new int[] {2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
 

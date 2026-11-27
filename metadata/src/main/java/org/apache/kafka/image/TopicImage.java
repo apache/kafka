@@ -24,6 +24,7 @@ import org.apache.kafka.image.node.TopicImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import java.util.Collections;
 import java.util.Map;
@@ -48,7 +49,7 @@ public record TopicImage(String name, Uuid id, Mirror mirror, Map<Integer, Parti
      * @param name         The name of the mirror. Never null.
      * @param desiredState The desired mirror partition state.
      */
-    public record ActiveMirror(String name, byte desiredState) implements Mirror {
+    public record ActiveMirror(String name, MirrorPartitionState desiredState) implements Mirror {
         public ActiveMirror {
             Objects.requireNonNull(name, "mirror name must not be null");
         }
@@ -89,7 +90,7 @@ public record TopicImage(String name, Uuid id, Mirror mirror, Map<Integer, Parti
                 writer.write(0, new MirrorTopicStateChangeRecord().
                         setTopicName(name).
                         setMirrorName(activeMirror.name()).
-                        setDesiredState(activeMirror.desiredState()));
+                        setDesiredState(activeMirror.desiredState().value()));
             }
         }
         for (Entry<Integer, PartitionRegistration> entry : partitions.entrySet()) {

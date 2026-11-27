@@ -25,7 +25,7 @@
     { "name": "MirrorName", "type": "string", "versions": "0+", "nullableVersions": "0+", "entityType": "mirrorName",
       "about": "The cluster mirror name. Null when disassociating a topic from a mirror." },
     { "name": "DesiredState", "type": "int8", "versions": "0+", "default": "-1",
-      "about": "The desired state for all mirror partitions. Valid values: UNKNOWN(-1), LOG_ALIGNMENT(0), EPOCH_FENCING(1), ULE_RECOVERY(2), MIRRORING(3), PAUSING(4), PAUSED(5), STOPPING(6), STOPPED(7), FAILED(8)." }
+      "about": "The desired state for all mirror partitions. Valid values: UNKNOWN(-1), LOG_ALIGNMENT(0), EPOCH_FENCING(1), ULE_RECOVERY(2), MIRRORING(3), PAUSING(4), PAUSED(5), STOPPING(6), STOPPED(7)." }
   ]
 }
 

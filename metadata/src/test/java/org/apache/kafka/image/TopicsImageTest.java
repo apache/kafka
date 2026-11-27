@@ -170,13 +170,13 @@ public class TopicsImageTest {
             changes.followers().keySet()
         );
         assertEquals(
-            Map.of(BAZ_UUID, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.LOG_ALIGNMENT.value())),
+            Map.of(BAZ_UUID, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.LOG_ALIGNMENT)),
             changes.mirrorTopicStates()
         );
 
         TopicsImage finalImage = delta.apply();
         TopicImage baz = finalImage.getTopic(BAZ_UUID);
-        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.LOG_ALIGNMENT.value()), baz.mirror());
+        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.LOG_ALIGNMENT), baz.mirror());
 
         List<ApiMessageAndVersion> imageRecords = getImageRecords(IMAGE1);
         imageRecords.addAll(topicRecords);
@@ -765,13 +765,13 @@ public class TopicsImageTest {
         assertEquals(Map.of(), changes.leaders());
         assertEquals(Map.of(), changes.followers());
         assertEquals(
-            Map.of(topicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value())),
+            Map.of(topicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING)),
             changes.mirrorTopicStates()
         );
 
         TopicsImage finalImage = delta.apply();
         TopicImage topic = finalImage.getTopic(topicId);
-        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value()), topic.mirror());
+        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING), topic.mirror());
         assertEquals(image.getTopic(topicId).partitions(), topic.partitions());
 
         List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
@@ -800,13 +800,13 @@ public class TopicsImageTest {
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(Set.of(new TopicPartition("topic", 0)), changes.electedLeaders().keySet());
         assertEquals(
-            Map.of(topicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.LOG_ALIGNMENT.value())),
+            Map.of(topicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.LOG_ALIGNMENT)),
             changes.mirrorTopicStates()
         );
 
         TopicsImage finalImage = delta.apply();
         TopicImage topic = finalImage.getTopic(topicId);
-        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.LOG_ALIGNMENT.value()), topic.mirror());
+        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.LOG_ALIGNMENT), topic.mirror());
         assertEquals(1, topic.partitions().size());
 
         testToImage(finalImage, Optional.of(topicRecords));
@@ -822,7 +822,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "topic",
                 topicId,
-                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value()),
+                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING),
                 newPartition(new int[] {localId, 1, 2})
             )
         );
@@ -836,13 +836,13 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(
-            Map.of(topicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED.value())),
+            Map.of(topicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED)),
             changes.mirrorTopicStates()
         );
 
         TopicsImage finalImage = delta.apply();
         TopicImage topic = finalImage.getTopic(topicId);
-        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED.value()), topic.mirror());
+        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED), topic.mirror());
 
         List<ApiMessageAndVersion> imageRecords = getImageRecords(image, MetadataVersion.IBP_4_5_IV1);
         imageRecords.addAll(topicRecords);
@@ -873,12 +873,12 @@ public class TopicsImageTest {
         RecordTestUtils.replayAll(delta, topicRecords);
 
         assertEquals(
-            Map.of(topicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.STOPPED.value())),
+            Map.of(topicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.STOPPED)),
             delta.localChanges(localId).mirrorTopicStates()
         );
 
         TopicsImage finalImage = delta.apply();
-        assertEquals(MirrorPartitionState.STOPPED.value(), ((TopicImage.ActiveMirror) finalImage.getTopic(topicId).mirror()).desiredState());
+        assertEquals(MirrorPartitionState.STOPPED, ((TopicImage.ActiveMirror) finalImage.getTopic(topicId).mirror()).desiredState());
 
         List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
         imageRecords.addAll(topicRecords);
@@ -895,7 +895,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "topic",
                 topicId,
-                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.STOPPED.value()),
+                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.STOPPED),
                 newPartition(new int[] {localId, 1, 2})
             )
         );
@@ -927,7 +927,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "topic",
                 topicId,
-                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.STOPPED.value()),
+                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.STOPPED),
                 newPartition(new int[] {3, 1, 2})
             )
         );
@@ -942,6 +942,29 @@ public class TopicsImageTest {
     }
 
     @Test
+    public void testMirrorTopicDesiredStateCannotBeFailed() {
+        Uuid topicId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
+
+        List<TopicImage> topics = new ArrayList<>();
+        topics.add(
+                newTopicImage(
+                        "topic",
+                        topicId,
+                        new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING),
+                        newPartition(new int[] {3, 1, 2})
+                )
+        );
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics), newTopicsByNameMap(topics));
+
+        List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
+        topicRecords.add(newMirrorTopicStateChangeRecord("topic", "test-mirror", MirrorPartitionState.FAILED));
+        TopicsDelta delta = new TopicsDelta(image);
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
+        assertEquals(IllegalArgumentException.class, ex.getCause().getClass());
+        assertEquals("desiredState cannot be FAILED", ex.getCause().getMessage());
+    }
+
+    @Test
     public void testSnapshotClearsMirrorTopicAssociation() {
         int localId = 3;
         Uuid topicId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
@@ -952,7 +975,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "topic",
                 topicId,
-                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value()),
+                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING),
                 newPartition(new int[] {localId, 1, 2})
             )
         );
@@ -960,7 +983,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "other-topic",
                 otherTopicId,
-                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED.value()),
+                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED),
                 newPartition(new int[] {localId, 1, 2})
             )
         );
@@ -988,7 +1011,7 @@ public class TopicsImageTest {
         assertEquals(
             Map.of(
                 topicId, new TopicImage.NoMirror(),
-                otherTopicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED.value())
+                otherTopicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED)
             ),
             delta.localChanges(localId).mirrorTopicStates()
         );
@@ -1000,7 +1023,7 @@ public class TopicsImageTest {
             delta.changedTopic(topicId).localChanges(localId).mirrorTopicStates()
         );
         assertEquals(
-            Map.of(otherTopicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED.value())),
+            Map.of(otherTopicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED)),
             delta.changedTopic(otherTopicId).localChanges(localId).mirrorTopicStates()
         );
 
@@ -1009,7 +1032,7 @@ public class TopicsImageTest {
         TopicImage topic = finalImage.getTopic(topicId);
         assertEquals(new TopicImage.NoMirror(), topic.mirror());
         TopicImage otherTopic = finalImage.getTopic(otherTopicId);
-        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED.value()), otherTopic.mirror());
+        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED), otherTopic.mirror());
 
         testToImage(finalImage, Optional.of(snapshotRecords));
     }
@@ -1024,7 +1047,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "topic",
                 topicId,
-                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value()),
+                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING),
                 newPartition(new int[] {localId, 1, 2})
             )
         );
@@ -1037,7 +1060,7 @@ public class TopicsImageTest {
         RecordTestUtils.replayAll(delta, topicRecords);
 
         // Re-writing the current state must still be reported, so that brokers re-process the mirror partitions.
-        TopicImage.Mirror expected = new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value());
+        TopicImage.Mirror expected = new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING);
         assertEquals(Map.of(topicId, expected), delta.localChanges(localId).mirrorTopicStates());
         assertEquals(Map.of(topicId, expected), delta.changedTopic(topicId).localChanges(localId).mirrorTopicStates());
 
@@ -1087,7 +1110,7 @@ public class TopicsImageTest {
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(Set.of(new TopicPartition("topic", 0)), changes.deletes());
         assertEquals(
-            Map.of(topicId2, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value())),
+            Map.of(topicId2, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING)),
             changes.mirrorTopicStates()
         );
 
@@ -1095,7 +1118,7 @@ public class TopicsImageTest {
         assertNull(finalImage.getTopic(topicId));
         TopicImage topic = finalImage.getTopic("topic");
         assertEquals(topicId2, topic.id());
-        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value()), topic.mirror());
+        assertEquals(new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING), topic.mirror());
 
         List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
         imageRecords.addAll(topicRecords);
@@ -1113,7 +1136,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "topic",
                 topicId,
-                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value()),
+                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING),
                 newPartition(new int[] {localId, 1, 2})
             )
         );

@@ -19,7 +19,6 @@ package org.apache.kafka.image.node;
 
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -63,7 +62,7 @@ public final class TopicImageNode implements MetadataNode {
             return null;
         } else if (name.equals("desiredMirrorState")) {
             if (image.mirror() instanceof TopicImage.ActiveMirror activeMirror) {
-                return new MetadataLeafNode(MirrorPartitionState.nameOf(activeMirror.desiredState()));
+                return new MetadataLeafNode(activeMirror.desiredState().name());
             }
             return null;
         } else {

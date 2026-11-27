@@ -128,10 +128,13 @@ public final class TopicDelta {
         if (record.mirrorName() == null && record.desiredState() != MirrorPartitionState.UNKNOWN.value()) {
             throw new IllegalArgumentException("desiredState must be UNKNOWN when mirrorName is null, got " + MirrorPartitionState.nameOf(record.desiredState()));
         }
+        if (record.desiredState() == MirrorPartitionState.FAILED.value()) {
+            throw new IllegalArgumentException("desiredState cannot be FAILED");
+        }
         mirrorRecordReplayed = true;
         mirror = record.mirrorName() == null ?
             new TopicImage.NoMirror() :
-            new TopicImage.ActiveMirror(record.mirrorName(), record.desiredState());
+            new TopicImage.ActiveMirror(record.mirrorName(), MirrorPartitionState.fromValue(record.desiredState()));
     }
 
     /**
