@@ -82,6 +82,19 @@ public class InsertHeaderTest {
     }
 
     @Test
+    public void insertionWithFloatHeader() {
+        xform.configure(config("inserted", "2.0"));
+        ConnectHeaders headers = new ConnectHeaders();
+        headers.addString("existing", "existing-value");
+        Headers expect = headers.duplicate().addFloat("inserted", 2.0f);
+
+        SourceRecord original = sourceRecord(headers);
+        SourceRecord xformed = xform.apply(original);
+        assertNonHeaders(original, xformed);
+        assertEquals(expect, xformed.headers());
+    }
+
+    @Test
     public void configRejectsNullHeaderKey() {
         assertThrows(ConfigException.class, () -> xform.configure(config(null, "1")));
     }
