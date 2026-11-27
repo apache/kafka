@@ -112,6 +112,7 @@ public class RemoteLagCopyTest {
 
         remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
+                topic -> leaderTopicIdPartition.topic().equals(topic) ? Optional.of(leaderTopicIdPartition.topicId()) : Optional.empty(),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics, endPoint) {
             @Override
