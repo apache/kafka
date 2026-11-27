@@ -22,6 +22,10 @@ FROM ${base_image} AS build-jsa
 
 USER root
 
+# A base image may set another WORKDIR (e.g. the runtime user's home); the relative paths below
+# and in jsa_launch expect /.
+WORKDIR /
+
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
 ARG kafka_url=""
 
@@ -31,13 +35,19 @@ COPY server.properties /etc/kafka/docker/server.properties
 COPY *kafka.tgz kafka.tgz
 
 RUN set -eux ; \
-    command -v java >/dev/null || { echo "base_image must carry a JRE (java not found on PATH)" >&2; exit 1; } ; \
-    apk update ; \
-    apk upgrade ; \
-    apk add --no-cache bash procps-ng; \
+    if command -v apk >/dev/null; then \
+        apk update ; \
+        apk upgrade ; \
+        apk add --no-cache bash procps-ng; \
+        if [ -n "$kafka_url" ]; then apk add --no-cache wget gcompat gpg gpg-agent; fi; \
+    fi; \
+    tools="java bash hostname tar gzip"; \
+    if [ -n "$kafka_url" ]; then tools="$tools wget gpg"; fi; \
+    for tool in $tools; do \
+        command -v "$tool" >/dev/null || { echo "Base image lacks '$tool', see the --base-image example in docker/README.md" >&2; exit 1; }; \
+    done; \
     mkdir opt/kafka; \
     if [ -n "$kafka_url" ]; then \
-        apk add --no-cache wget gcompat gpg gpg-agent; \
         wget -nv -O kafka.tgz "$kafka_url"; \
         wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
@@ -59,6 +69,8 @@ EXPOSE 9092
 
 USER root
 
+WORKDIR /
+
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
 ARG kafka_url=""
 ARG build_date
@@ -73,11 +85,13 @@ LABEL org.label-schema.name="kafka" \
 
 RUN mkdir opt/kafka; \
     set -eux ; \
-    apk update ; \
-    apk upgrade ; \
-    apk add --no-cache bash procps-ng; \
+    if command -v apk >/dev/null; then \
+        apk update ; \
+        apk upgrade ; \
+        apk add --no-cache bash procps-ng; \
+        if [ -n "$kafka_url" ]; then apk add --no-cache wget gcompat gpg gpg-agent; fi; \
+    fi; \
     if [ -n "$kafka_url" ]; then \
-        apk add --no-cache wget gcompat gpg gpg-agent; \
         wget -nv -O kafka.tgz "$kafka_url"; \
         wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
         tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
@@ -85,20 +99,25 @@ RUN mkdir opt/kafka; \
         gpg --import KEYS; \
         gpg --batch --verify kafka.tgz.asc kafka.tgz; \
         rm kafka.tgz kafka.tgz.asc KEYS; \
-        apk del wget gpg gpg-agent; \
+        if command -v apk >/dev/null; then apk del wget gpg gpg-agent; fi; \
     else \
         tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
         rm kafka.tgz; \
     fi; \
     mkdir -p /var/lib/kafka/data /etc/kafka/secrets; \
     mkdir -p /etc/kafka/docker /usr/logs /mnt/shared/config; \
-    adduser -h /home/appuser -D --shell /bin/bash appuser; \
+    # shadow-utils `useradd` where present, BusyBox `adduser` otherwise (Alpine).
+    if command -v useradd >/dev/null; then \
+        useradd -m -d /home/appuser -s /bin/bash appuser; \
+    else \
+        adduser -h /home/appuser -D --shell /bin/bash appuser; \
+    fi; \
     chown appuser:appuser -R /usr/logs /opt/kafka /mnt/shared/config; \
     chown appuser:root -R /var/lib/kafka /etc/kafka/secrets /etc/kafka; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /etc/kafka/secrets; \
     cp /opt/kafka/config/log4j2.yaml /etc/kafka/docker/log4j2.yaml; \
     cp /opt/kafka/config/tools-log4j2.yaml /etc/kafka/docker/tools-log4j2.yaml; \
-    apk cache clean;
+    if command -v apk >/dev/null; then apk cache clean; fi;
 
 COPY server.properties /etc/kafka/docker/server.properties
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
