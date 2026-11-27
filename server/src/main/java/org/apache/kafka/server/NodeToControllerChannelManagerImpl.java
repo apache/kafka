@@ -44,6 +44,7 @@ import org.apache.kafka.server.config.ServerConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -108,7 +109,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 metrics,
                 time,
                 channelName,
-                Map.of("BrokerId", String.valueOf(config.brokerId())),
+                selectorMetricTags(config),
                 false,
                 channelBuilder,
                 logContext
@@ -134,6 +135,17 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 BootstrapConfiguration.DISABLED,
                 false
         );
+    }
+
+    static Map<String, String> selectorMetricTags(AbstractKafkaConfig config) {
+        List<String> processRoles = config.getList(KRaftConfigs.PROCESS_ROLES_CONFIG);
+        boolean isController = processRoles.contains(ProcessRole.ControllerRole.toString());
+        boolean isBroker = processRoles.contains(ProcessRole.BrokerRole.toString());
+
+        if (isController && !isBroker) {
+            return Map.of("NodeId", String.valueOf(config.nodeId()));
+        }
+        return Map.of("BrokerId", String.valueOf(config.brokerId()));
     }
 
     @Override
