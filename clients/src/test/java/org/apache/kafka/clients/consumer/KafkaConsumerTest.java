@@ -191,6 +191,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -752,6 +753,48 @@ public class KafkaConsumerTest {
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "instance_id");
         consumer = newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testRebalanceListenerRegisteredWithoutGroupId(GroupProtocol groupProtocol) {
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Map.of(topic, 1));
+
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, null, groupInstanceId, false);
+        MockRebalanceListener listener = new MockRebalanceListener();
+        consumer.setRebalanceListener(listener);
+
+        consumer.assign(Set.of(tp0));
+        consumer.seekToBeginning(Set.of(tp0));
+        client.prepareResponse(listOffsetsResponse(Map.of(tp0, 50L)));
+        client.prepareResponse(fetchResponse(tp0, 50L, 5));
+
+        // Without a group.id the consumer can only use manual assignment, and it still fetches records.
+        var records = consumer.poll(Duration.ofMillis(1));
+        assertEquals(5, records.count());
+        assertEquals(55L, consumer.position(tp0));
+
+        consumer.unsubscribe();
+        consumer.close(CloseOptions.timeout(Duration.ZERO));
+        assertEquals(0, listener.assignedCount);
+        assertEquals(0, listener.revokedCount);
+        assertEquals(0, listener.lostCount);
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testRebalanceListenerNotInvokedWithManualAssignment(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
+        RebalanceListener listener = mock(RebalanceListener.class);
+        consumer.setRebalanceListener(listener);
+
+        consumer.assign(List.of(tp0));
+        consumer.unsubscribe();
+        consumer.close(CloseOptions.timeout(Duration.ZERO));
+
+        verifyNoInteractions(listener);
     }
 
     @ParameterizedTest

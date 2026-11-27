@@ -538,6 +538,61 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
+    public void testClassicConsumerRebalanceListenerOnlyInvokedWithGroupManagement() throws InterruptedException {
+        testRebalanceListenerOnlyInvokedWithGroupManagement(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerRebalanceListenerOnlyInvokedWithGroupManagement() throws InterruptedException {
+        testRebalanceListenerOnlyInvokedWithGroupManagement(CONSUMER);
+    }
+
+    private void testRebalanceListenerOnlyInvokedWithGroupManagement(GroupProtocol groupProtocol) throws InterruptedException {
+        var assignedCount = new AtomicInteger(0);
+        var revokedCount = new AtomicInteger(0);
+        var totalRecords = 10;
+        var startingTimestamp = 0L;
+        sendRecords(cluster, tp, totalRecords, startingTimestamp);
+
+        try (var consumer = createConsumer(groupProtocol)) {
+            consumer.setRebalanceListener(new RebalanceListener() {
+                @Override
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        assignedCount.incrementAndGet();
+                    }
+                }
+
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        revokedCount.incrementAndGet();
+                    }
+                }
+            });
+
+            // Manual assignment does not use group management
+            consumer.assign(List.of(tp));
+            consumer.seekToBeginning(List.of(tp));
+            consumeAndVerifyRecords(consumer, tp, totalRecords, 0, 0, startingTimestamp);
+            assertEquals(0, assignedCount.get(), "manual assignment should not invoke onPartitionsAssigned");
+
+            consumer.unsubscribe();
+            assertEquals(0, revokedCount.get(), "unsubscribe() should not invoke onPartitionsRevoked for manual assignment");
+
+            // The same listener is invoked once the consumer switches to group management through subscribe().
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    () -> assignedCount.get() == 1,
+                    "Timed out waiting for the rebalance listener to be invoked after subscribing"
+            );
+        }
+        // close() invokes onPartitionsRevoked
+        assertEquals(1, revokedCount.get(), "close() should invoke onPartitionsRevoked");
+    }
+
+    @ClusterTest
     public void testClassicConsumerRebalanceListenerRemovedByNull() throws InterruptedException {
         testRebalanceListenerRemovedByNull(CLASSIC);
     }

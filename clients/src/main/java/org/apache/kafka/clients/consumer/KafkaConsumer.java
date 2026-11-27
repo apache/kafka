@@ -902,9 +902,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * the previous pattern of passing a listener to the {@code subscribe()} methods (which are now deprecated).
      *
      * <p>
-     * The listener can be updated at any time. The change takes effect on the next {@link #poll(Duration)}
-     * invocation: any rebalance triggered during that poll (or subsequent polls) will use the most recently
-     * set listener.
+     * The listener can be registered on a consumer with or without group management, including a consumer
+     * without a {@code group.id}. It is invoked only while the consumer uses group management through
+     * {@code subscribe()}. A registered listener is retained when the consumer switches between
+     * {@code assign()} and {@code subscribe()}, so it takes effect once the consumer subscribes.
+     *
+     * <p>
+     * The listener can be updated at any time by calling this method again, which replaces the previous
+     * listener. The change takes effect immediately: any subsequent callback uses the most recently set
+     * listener, including callbacks triggered by {@link #unsubscribe()} or {@link #close()}.
      *
      * <p>
      * Passing {@code null} removes the current listener, so that no callbacks are invoked on future rebalances.
@@ -912,11 +918,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * If a listener was previously registered via one of the deprecated {@code subscribe(topics, listener)}
      * variants, calling this method will override it.
-     *
-     * <p>
-     * Multiple invocations of this method will result in overriding any previous references stored.
-     * The final instance set prior to any {@link #poll(Duration) polls} will be the one to receive
-     * callbacks during rebalance events.
      *
      * @param callback The listener to invoke on partition assignment changes, or {@code null} to remove
      *                 the current listener.
