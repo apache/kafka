@@ -1,0 +1,119 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.streams.state.internals;
+
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.apache.kafka.streams.state.internals.StoreMethodSignatures.inheritedInterfaceDefaults;
+import static org.apache.kafka.streams.state.internals.StoreMethodSignatures.instanceMethods;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Requires every {@link TimestampedWindowStoreWithHeaders} method to be classified into a contract group,
+ * and every method except {@link #INHERITED_DEFAULTS} to be overridden by
+ * {@link WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapter} (or its {@link WrappedStateStore}
+ * base), so a dropped override fails this test rather than escaping to manual testing (KAFKA-20328). A
+ * dropped {@code backward*} override would inherit the {@code WindowStore} default that throws
+ * {@link UnsupportedOperationException}.
+ * Behavioral assertions live in {@link WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapterTest}.
+ */
+public class WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapterCompletenessTest {
+
+    private static final Set<String> VALUE_CONVERTING = Set.of(
+        "fetch(Object,long)"
+    );
+
+    private static final Set<String> ITERATOR_WRAPPING = Set.of(
+        "fetch(Object,long,long)",
+        "fetch(Object,Instant,Instant)",
+        "backwardFetch(Object,long,long)",
+        "backwardFetch(Object,Instant,Instant)",
+        "fetch(Object,Object,long,long)",
+        "fetch(Object,Object,Instant,Instant)",
+        "backwardFetch(Object,Object,long,long)",
+        "backwardFetch(Object,Object,Instant,Instant)",
+        "all()",
+        "backwardAll()",
+        "fetchAll(long,long)",
+        "fetchAll(Instant,Instant)",
+        "backwardFetchAll(long,long)",
+        "backwardFetchAll(Instant,Instant)"
+    );
+
+    private static final Set<String> HEADER_STRIPPING = Set.of(
+        "put(Object,Object,long)"
+    );
+
+    private static final Set<String> DELEGATING = Set.of(
+        "name()",
+        "init(StateStoreContext,StateStore)",
+        "commit(Map)",
+        "managesOffsets()",
+        "committedOffset(TopicPartition)",
+        "approximateNumUncommittedBytes()",
+        "close()",
+        "persistent()",
+        "isOpen()",
+        "query(Query,PositionBound,QueryConfig)",
+        "getPosition()",
+        "flush()"
+    );
+
+    // readOnly is NOT harmless: the adapter inherits the default that returns `this`, so the isolation
+    // level never reaches the inner store and READ_COMMITTED reads can observe uncommitted writes.
+    // Tracked by KAFKA-21505; remove readOnly from here once the adapter overrides it.
+    private static final Set<String> INHERITED_DEFAULTS = Set.of(
+        "readOnly(IsolationLevel)"
+    );
+
+    @Test
+    public void everyStoreMethodMustBeClassified() {
+        final Set<String> classified = Stream.of(
+                VALUE_CONVERTING, ITERATOR_WRAPPING, HEADER_STRIPPING, DELEGATING, INHERITED_DEFAULTS)
+            .flatMap(Set::stream)
+            .collect(Collectors.toSet());
+
+        final Set<String> unclassified = instanceMethods(TimestampedWindowStoreWithHeaders.class)
+            .map(StoreMethodSignatures::signature)
+            .filter(sig -> !classified.contains(sig))
+            .collect(Collectors.toCollection(TreeSet::new));
+
+        assertTrue(unclassified.isEmpty(),
+            "Unclassified TimestampedWindowStoreWithHeaders method(s): " + unclassified + ". Add each to a "
+                + "contract group in this test AND cover it with a behavioral test in "
+                + "WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapterTest.");
+    }
+
+    @Test
+    public void onlyAllowListedMethodsMayFallBackToInterfaceDefaults() {
+        assertEquals(INHERITED_DEFAULTS,
+            inheritedInterfaceDefaults(
+                WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapter.class,
+                TimestampedWindowStoreWithHeaders.class),
+            "An inherited interface default cannot reach the inner store: it either throws "
+                + "UnsupportedOperationException or silently stops delegating. Override the method in the "
+                + "adapter, or (if it now overrides an allow-listed method) remove it from INHERITED_DEFAULTS.");
+    }
+}

@@ -132,7 +132,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
-        assertInstanceOf(CachingKeyValueStore.class, wrapped);
+        assertEquals(CachingKeyValueStoreWithHeaders.class, wrapped.getClass());
     }
 
     @Test
@@ -157,7 +157,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
-        assertInstanceOf(CachingKeyValueStore.class, caching);
+        assertEquals(CachingKeyValueStoreWithHeaders.class, caching.getClass());
         assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class, changeLogging);
         assertEquals(changeLogging.wrapped(), inner);
     }

@@ -140,7 +140,10 @@ public class KeyValueTimestampedHeaderStoreToKeyValueTimestampStoreAdapter<K, V>
         wrapped().putAll(
             entries.stream().map(keyValuePair -> KeyValue.pair(
                 keyValuePair.key,
-                ValueAndTimestamp.make(keyValuePair.value.value(), keyValuePair.value.timestamp()))
+                // a null value is a delete (see KeyValueStore#putAll); forward it like put() does
+                keyValuePair.value == null
+                    ? null
+                    : ValueAndTimestamp.make(keyValuePair.value.value(), keyValuePair.value.timestamp()))
             )
             .collect(Collectors.toList())
         );

@@ -34,6 +34,7 @@ final class MeteredWindowedKeyValueWithHeadersIterator<K, VInner, VOuter> extend
     private final BiFunction<byte[], Headers, K> deserializeKey;
     private final Function<VInner, Headers> headersExtractor;
     private final Function<VInner, VOuter> valueConverter;
+    private KeyValue<Windowed<K>, VOuter> cachedNext;
 
     MeteredWindowedKeyValueWithHeadersIterator(
         final KeyValueIterator<Windowed<Bytes>, byte[]> iter,
@@ -65,13 +66,35 @@ final class MeteredWindowedKeyValueWithHeadersIterator<K, VInner, VOuter> extend
     }
 
     @Override
+    public boolean hasNext() {
+        return cachedNext != null || iter.hasNext();
+    }
+
+    @Override
     public KeyValue<Windowed<K>, VOuter> next() {
+        if (cachedNext != null) {
+            final KeyValue<Windowed<K>, VOuter> result = cachedNext;
+            cachedNext = null;
+            return result;
+        }
+
         final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
         final VInner valueTimestampHeaders = deserializeValue.apply(next.value);
         return KeyValue.pair(
             windowedKey(next.key, headersExtractor.apply(valueTimestampHeaders)),
             valueConverter.apply(valueTimestampHeaders)
         );
+    }
+
+    // The key deserializer needs the headers stored with the value, so the key cannot be deserialized from
+    // iter.peekNextKey() alone (the super-class deserializeKey is null here). Like the other headers-aware
+    // metered iterators, peek by reading the next entry and caching it for the following next() call.
+    @Override
+    public Windowed<K> peekNextKey() {
+        if (cachedNext == null) {
+            cachedNext = next();
+        }
+        return cachedNext.key;
     }
 
     private Windowed<K> windowedKey(final Windowed<Bytes> bytesKey, final Headers headers) {
