@@ -93,6 +93,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.FutureTask;
 import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
@@ -173,6 +174,25 @@ public class StreamsBuilderTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.build(properties);
+    }
+
+    @Test
+    public void shouldBuildDeepLinearTopology() throws Exception {
+        final int depth = 10_000;
+        KStream<String, String> stream = builder.stream(STREAM_TOPIC);
+        for (int i = 0; i < depth; i++) {
+            stream = stream.mapValues(v -> v);
+        }
+
+        // Build on a thread with a fixed 1 MB stack (the common JVM default), so the result does not depend on
+        // the stack size of the test runner's thread.
+        final FutureTask<TopologyDescription> buildTask = new FutureTask<>(() -> builder.build().describe());
+        final Thread buildThread = new Thread(null, buildTask, "build-deep-topology", 1024 * 1024);
+        buildThread.start();
+        final TopologyDescription description = buildTask.get();
+
+        assertEquals(1, description.subtopologies().size());
+        assertEquals(depth + 1, description.subtopologies().iterator().next().nodes().size());
     }
 
     @Test
