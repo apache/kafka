@@ -43,6 +43,8 @@ import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -80,6 +82,27 @@ public class GroupCoordinatorConfigTest {
             SubscribedTopicDescriber subscribedTopicDescriber
         ) throws PartitionAssignorException {
             return null;
+        }
+    }
+
+    public static class LeadingWhitespaceCustomAssignor extends CustomAssignor {
+        @Override
+        public String name() {
+            return " regional";
+        }
+    }
+
+    public static class TrailingWhitespaceCustomAssignor extends CustomAssignor {
+        @Override
+        public String name() {
+            return "regional ";
+        }
+    }
+
+    public static class TabAndNewlineCustomAssignor extends CustomAssignor {
+        @Override
+        public String name() {
+            return "\tregional\n";
         }
     }
 
@@ -299,6 +322,25 @@ public class GroupCoordinatorConfigTest {
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+        GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG,
+        GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG
+    })
+    public void testAssignorsWithSurroundingWhitespaceFails(String configName) {
+        for (CustomAssignor assignor : List.of(
+            new LeadingWhitespaceCustomAssignor(),
+            new TrailingWhitespaceCustomAssignor(),
+            new TabAndNewlineCustomAssignor()
+        )) {
+            Map<String, Object> configs = Map.of(configName, assignor.getClass().getName());
+            assertEquals("Invalid value " + assignor.getClass().getName() +
+                    " for configuration " + configName + ": Assignor name '" + assignor.name() +
+                    "' must not contain leading or trailing whitespace.",
+                assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+        }
+    }
+
     public static class CustomTaskAssignor implements TaskAssignor, Configurable {
         public Map<String, ?> configs;
 
@@ -318,6 +360,27 @@ public class GroupCoordinatorConfigTest {
             TopologyDescriber topologyDescriber
         ) {
             return null;
+        }
+    }
+
+    public static class LeadingWhitespaceTaskAssignor extends CustomTaskAssignor {
+        @Override
+        public String name() {
+            return " regional";
+        }
+    }
+
+    public static class TrailingWhitespaceTaskAssignor extends CustomTaskAssignor {
+        @Override
+        public String name() {
+            return "regional ";
+        }
+    }
+
+    public static class TabAndNewlineTaskAssignor extends CustomTaskAssignor {
+        @Override
+        public String name() {
+            return "\tregional\n";
         }
     }
 
@@ -422,6 +485,22 @@ public class GroupCoordinatorConfigTest {
         assertEquals(2, assignors.size());
         assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
         assertInstanceOf(CustomTaskAssignor.class, assignors.get(1));
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsWithSurroundingWhitespaceFails() {
+        for (TaskAssignor assignor : List.of(
+            new LeadingWhitespaceTaskAssignor(),
+            new TrailingWhitespaceTaskAssignor(),
+            new TabAndNewlineTaskAssignor()
+        )) {
+            Map<String, Object> configs = Map.of(
+                GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, assignor.getClass().getName());
+            assertEquals("Invalid value " + assignor.getClass().getName() +
+                    " for configuration group.streams.assignors: Assignor name '" + assignor.name() +
+                    "' must not contain leading or trailing whitespace.",
+                assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+        }
     }
 
     @Test
