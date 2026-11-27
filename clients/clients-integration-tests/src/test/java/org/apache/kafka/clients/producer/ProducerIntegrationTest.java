@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -109,6 +110,30 @@ public class ProducerIntegrationTest {
 
             producer.beginTransaction();
             producer.commitTransaction();
+        }
+    }
+
+    @ClusterTests({
+        @ClusterTest(features = {
+            @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 0)}),
+        @ClusterTest(features = {
+            @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 1)}),
+        @ClusterTest(features = {
+            @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)}),
+    })
+    public void testCloseWithEmptyTransaction(ClusterInstance cluster) {
+        Map<String, Object> properties = Map.of(
+            ProducerConfig.TRANSACTIONAL_ID_CONFIG, "foobar",
+            ProducerConfig.CLIENT_ID_CONFIG, "test",
+            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true",
+            ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, "60000");
+        try (var producer = cluster.producer(properties)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+            long start = System.nanoTime();
+            producer.close();
+            long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+            assertTrue(elapsedMs < 5000, "close() took " + elapsedMs + " ms with an empty transaction");
         }
     }
 

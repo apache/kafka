@@ -455,7 +455,8 @@ public class Sender implements Runnable {
     }
 
     /**
-     * Returns true if a transactional request is sent or polled, or if a FindCoordinator request is enqueued
+     * Returns true if a transactional request is sent or polled, if a FindCoordinator request is enqueued,
+     * or if the sender is closing and the transaction was completed locally without sending EndTxn
      */
     private boolean maybeSendAndPollTransactionalRequest() {
         if (transactionManager.hasInFlightRequest()) {
@@ -470,9 +471,10 @@ public class Sender implements Runnable {
             accumulator.abortUndrainedBatches(new TransactionAbortedException());
         }
 
+        boolean wasCompleting = transactionManager.isCompleting();
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequest(accumulator.hasIncomplete());
         if (nextRequestHandler == null)
-            return false;
+            return !running && wasCompleting && !transactionManager.hasOngoingTransaction();
 
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
         Node targetNode = null;
