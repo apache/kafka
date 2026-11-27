@@ -130,6 +130,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final ReauthInfo reauthInfo;
     private final ChannelMetadataRegistry metadataRegistry;
     private final Function<Short, ApiVersionsResponse> apiVersionSupplier;
+    private final boolean enableUnstableLastVersion;
 
     // Current SASL state
     private SaslState saslState = SaslState.INITIAL_REQUEST;
@@ -163,7 +164,8 @@ public class SaslServerAuthenticator implements Authenticator {
                                    Map<String, Long> connectionsMaxReauthMsByMechanism,
                                    ChannelMetadataRegistry metadataRegistry,
                                    Time time,
-                                   Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+                                   Function<Short, ApiVersionsResponse> apiVersionSupplier,
+                                   boolean enableUnstableLastVersion) {
         this.callbackHandlers = callbackHandlers;
         this.connectionId = connectionId;
         this.subjects = subjects;
@@ -176,6 +178,7 @@ public class SaslServerAuthenticator implements Authenticator {
         this.reauthInfo = new ReauthInfo();
         this.metadataRegistry = metadataRegistry;
         this.apiVersionSupplier = apiVersionSupplier;
+        this.enableUnstableLastVersion = enableUnstableLastVersion;
 
         this.configs = configs;
         @SuppressWarnings("unchecked")
@@ -442,6 +445,10 @@ public class SaslServerAuthenticator implements Authenticator {
             ByteBuffer requestBuffer = ByteBuffer.wrap(clientToken);
             RequestHeader header = RequestHeader.parse(requestBuffer);
             ApiKeys apiKey = header.apiKey();
+            if (apiKey == ApiKeys.SASL_AUTHENTICATE && header.isApiVersionSupported()
+                    && !apiKey.isVersionEnabled(header.apiVersion(), enableUnstableLastVersion))
+                throw new InvalidRequestException("Received request for disabled api with key " + apiKey.id + " (" +
+                        apiKey.name() + ") and version " + header.apiVersion());
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(), Optional.of(clientPort()),
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);

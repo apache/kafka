@@ -76,7 +76,7 @@ public class ChannelBuilders {
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
         return create(securityProtocol, ConnectionMode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
-            null, null, time, logContext, null);
+            null, null, time, logContext, null, false);
     }
 
     /**
@@ -89,6 +89,7 @@ public class ChannelBuilders {
      * @param time the time instance
      * @param logContext the log context instance
      * @param apiVersionSupplier supplier for ApiVersions responses sent prior to authentication
+     * @param enableUnstableLastVersion whether unstable SaslAuthenticate versions are accepted
      *
      * @return the configured `ChannelBuilder`
      */
@@ -100,10 +101,11 @@ public class ChannelBuilders {
                                                       DelegationTokenCache tokenCache,
                                                       Time time,
                                                       LogContext logContext,
-                                                      Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+                                                      Function<Short, ApiVersionsResponse> apiVersionSupplier,
+                                                      boolean enableUnstableLastVersion) {
         return create(securityProtocol, ConnectionMode.SERVER, JaasContext.Type.SERVER, config, listenerName,
                 isInterBrokerListener, null, credentialCache, tokenCache, time, logContext,
-                apiVersionSupplier);
+                apiVersionSupplier, enableUnstableLastVersion);
     }
 
     private static ChannelBuilder create(SecurityProtocol securityProtocol,
@@ -117,7 +119,8 @@ public class ChannelBuilders {
                                          DelegationTokenCache tokenCache,
                                          Time time,
                                          LogContext logContext,
-                                         Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+                                         Function<Short, ApiVersionsResponse> apiVersionSupplier,
+                                         boolean enableUnstableLastVersion) {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
 
         ChannelBuilder channelBuilder;
@@ -175,7 +178,8 @@ public class ChannelBuilders {
                         sslClientAuthOverride,
                         time,
                         logContext,
-                        apiVersionSupplier);
+                        apiVersionSupplier,
+                        enableUnstableLastVersion);
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder(listenerName);
