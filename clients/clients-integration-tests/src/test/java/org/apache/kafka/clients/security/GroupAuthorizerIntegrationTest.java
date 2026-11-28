@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.security;
 
+import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -56,8 +57,6 @@ import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.net.InetAddress;
 import java.time.Duration;
 import java.util.Collections;
@@ -67,6 +66,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
@@ -442,22 +442,20 @@ public class GroupAuthorizerIntegrationTest {
     }
 
     /**
-     * A share consumer is assigned a topic which it is not authorized to read, and the READ ACL is added afterwards.
-     * The consumer must then receive the records, without being recreated, and without throwing the authorization
-     * errors it received before the ACL was added for many polls.
+     * A share consumer subscribes to a topic which it is not authorized to read, and the READ ACL is added afterwards.
+     * The consumer must then receive the records without being recreated.
      */
     @ClusterTest(serverProperties = {
         @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1")
     })
-    @Timeout(180)
     public void testShareConsumerRecoversAfterTopicReadAclIsAdded(ClusterInstance clusterInstance) throws Exception {
         setup(clusterInstance);
         // The broker sends the share group state requests through the inter-broker listener, which is the client
         // listener in this cluster, so they are authorized as the client principal.
-        // TODO: Use a separate inter-broker listener, which is authorized as the broker principal, once ClusterTest
-        // supports it, and remove the CLUSTER_ACTION ACL of the client principal.
+        // TODO: KAFKA-19443 Use a separate inter-broker listener, which is authorized as the broker principal, once
+        // ClusterTest supports it, and remove the CLUSTER_ACTION ACL of the client principal.
         addAndVerifyAcls(
                 Set.of(createAcl(AclOperation.CLUSTER_ACTION, AclPermissionType.ALLOW, BROKER_PRINCIPAL),
                     createAcl(AclOperation.CLUSTER_ACTION, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
@@ -466,8 +464,7 @@ public class GroupAuthorizerIntegrationTest {
         );
         String topic = "topic";
         String group = "group";
-        Set<AccessControlEntry> topicAcls = topicAclsWithoutRead();
-        addAndVerifyAcls(topicAcls, new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL), clusterInstance);
+        addAndVerifyAcls(topicAclsWithoutRead(), new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL), clusterInstance);
         addAndVerifyAcls(Set.of(
                 createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL),
                 createAcl(AclOperation.ALTER_CONFIGS, AclPermissionType.ALLOW, CLIENT_PRINCIPAL),
@@ -476,25 +473,22 @@ public class GroupAuthorizerIntegrationTest {
         clusterInstance.createTopic(topic, 1, (short) 1);
         setShareAutoOffsetResetToEarliest(clusterInstance, group);
 
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer();
-             ShareConsumer<byte[], byte[]> consumer = clusterInstance.shareConsumer(Map.of(ConsumerConfig.GROUP_ID_CONFIG, group))) {
+        try (ShareConsumer<byte[], byte[]> consumer = clusterInstance.shareConsumer(Map.of(ConsumerConfig.GROUP_ID_CONFIG, group))) {
             consumer.subscribe(List.of(topic));
-            assertRecoversAfterTopicReadAclIsAdded(clusterInstance, producer, topic, topicAcls, consumer::poll);
+            assertRecoversAfterTopicReadAclIsAdded(clusterInstance, topic, consumer::poll);
         }
     }
 
     /**
      * The same scenario as {@link #testShareConsumerRecoversAfterTopicReadAclIsAdded(ClusterInstance)} for an
-     * async consumer which is assigned the partition.
+     * async consumer.
      */
     @ClusterTest
-    @Timeout(180)
     public void testAsyncConsumerRecoversAfterTopicReadAclIsAdded(ClusterInstance clusterInstance) throws Exception {
         setup(clusterInstance);
         String topic = "topic";
         String group = "group";
-        Set<AccessControlEntry> topicAcls = topicAclsWithoutRead();
-        addAndVerifyAcls(topicAcls, new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL), clusterInstance);
+        addAndVerifyAcls(topicAclsWithoutRead(), new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL), clusterInstance);
         addAndVerifyAcls(
                 Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
                 new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
@@ -502,14 +496,11 @@ public class GroupAuthorizerIntegrationTest {
         );
         clusterInstance.createTopic(topic, 1, (short) 1);
 
-        try (Producer<byte[], byte[]> producer = clusterInstance.producer();
-             Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
                      ConsumerConfig.GROUP_ID_CONFIG, group,
-                     ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-                     ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
                      GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT)))) {
-            consumer.assign(List.of(new TopicPartition(topic, 0)));
-            assertRecoversAfterTopicReadAclIsAdded(clusterInstance, producer, topic, topicAcls, consumer::poll);
+            consumer.subscribe(List.of(topic));
+            assertRecoversAfterTopicReadAclIsAdded(clusterInstance, topic, consumer::poll);
         }
     }
 
@@ -522,39 +513,43 @@ public class GroupAuthorizerIntegrationTest {
 
     /**
      * Produces records which the consumer is not authorized to read, and adds the topic READ ACL once it got
-     * authorization errors. The consumer must then receive all the records, without throwing the authorization errors
-     * it received before the ACL was added for many polls.
+     * authorization errors. The consumer must then receive all the records, throwing at most one authorization error
+     * from a fetch sent before the ACL was added.
      */
     private void assertRecoversAfterTopicReadAclIsAdded(
             ClusterInstance clusterInstance,
-            Producer<byte[], byte[]> producer,
             String topic,
-            Set<AccessControlEntry> topicAclsWithoutRead,
             Function<Duration, ConsumerRecords<byte[], byte[]>> consumer
     ) throws Exception {
         Set<String> received = new HashSet<>();
-        produce(producer, topic, "record", 100);
+        ClientsTestUtils.sendRecords(clusterInstance, new TopicPartition(topic, 0), 100);
 
         // Without the READ ACL, the consumer gets authorization errors.
-        TestUtils.waitForCondition(() -> poll(consumer, received) > 0, 60000,
-            "no authorization error was thrown without the READ ACL");
-        long deadline = System.currentTimeMillis() + 3000;
-        while (System.currentTimeMillis() < deadline) {
-            poll(consumer, received);
-        }
+        TestUtils.waitForCondition(() -> {
+            try {
+                consumer.apply(Duration.ofMillis(200)).forEach(record -> received.add(new String(record.value())));
+                return false;
+            } catch (TopicAuthorizationException e) {
+                return true;
+            }
+        }, 60000, "no authorization error was thrown without the READ ACL");
         assertTrue(received.isEmpty(), received.size() + " records were delivered without the READ ACL");
 
-        // Once the ACL is added, the consumer must receive the records.
-        Set<AccessControlEntry> topicAcls = new HashSet<>(topicAclsWithoutRead);
+        // Once the ACL is added, the consumer must receive the records, ignoring at most one authorization error from
+        // a fetch sent before the ACL was added.
+        Set<AccessControlEntry> topicAcls = new HashSet<>(topicAclsWithoutRead());
         topicAcls.add(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
         addAndVerifyAcls(topicAcls, new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL), clusterInstance);
-        int[] errorsAfterAdding = {0};
+        AtomicInteger errors = new AtomicInteger();
         TestUtils.waitForCondition(() -> {
-            errorsAfterAdding[0] += poll(consumer, received);
+            try {
+                consumer.apply(Duration.ofMillis(200)).forEach(record -> received.add(new String(record.value())));
+            } catch (TopicAuthorizationException e) {
+                errors.incrementAndGet();
+            }
             return received.size() == 100;
         }, 120000, () -> "only " + received.size() + " of 100 records were delivered after the ACL was added");
-        assertTrue(errorsAfterAdding[0] <= 10, errorsAfterAdding[0]
-            + " authorization errors were thrown after the ACL was added");
+        assertTrue(errors.get() <= 1, errors.get() + " authorization errors were thrown after the ACL was added");
     }
 
     private void setShareAutoOffsetResetToEarliest(ClusterInstance clusterInstance, String group) throws Exception {
@@ -566,26 +561,6 @@ public class GroupAuthorizerIntegrationTest {
                 ConfigEntry entry = admin.describeConfigs(List.of(resource)).all().get().get(resource).get("share.auto.offset.reset");
                 return entry != null && "earliest".equals(entry.value());
             }, "share.auto.offset.reset was not set");
-        }
-    }
-
-    private static void produce(Producer<byte[], byte[]> producer, String topic, String prefix, int count) throws Exception {
-        for (int i = 0; i < count; i++) {
-            producer.send(new ProducerRecord<>(topic, (prefix + "-" + i).getBytes()));
-        }
-        producer.flush();
-    }
-
-    /**
-     * Polls the consumer once and adds the values of the records to {@code received}. Returns 1 if the consumer threw a
-     * {@link TopicAuthorizationException}, or 0 otherwise.
-     */
-    private static int poll(Function<Duration, ConsumerRecords<byte[], byte[]>> consumer, Set<String> received) {
-        try {
-            consumer.apply(Duration.ofMillis(200)).forEach(record -> received.add(new String(record.value())));
-            return 0;
-        } catch (TopicAuthorizationException e) {
-            return 1;
         }
     }
 }
