@@ -137,6 +137,10 @@ Example `pom.xml` snippet when using Maven:
         <version>4.4.0</version>
     </dependency>
 
+**Tip**
+
+To catch uses of internal Kafka APIs, which can silently break when you upgrade Kafka, add the [Internal API Checker](/{version}/apis/internal-api-checker/) to your Maven or Gradle build.
+
 # Using Kafka Streams within your application code
 
 You can call Kafka Streams from anywhere in your application code, but usually these calls are made within the `main()` method of your application, or some variant thereof. The basic elements of defining a processing topology within your application are described below.
