@@ -55,7 +55,6 @@ wrapper.doFirst {
     String distChecksum = fetchText("${wrapper.distributionUrl}.sha256")
     wrapper.distributionSha256Sum = distChecksum
     logger.lifecycle("Gradle $gradleVersion distribution: $distChecksum")
-    wrapperChecksum = fetchText("https://services.gradle.org/distributions/gradle-${gradleVersion}-wrapper.jar.sha256")
 
     // Gradle doesn't publish the wrapper jar as a standalone download, so fetch it from the gradle/gradle
     // repository. A release tag contains the bootstrap jar Gradle uses to build itself, which may be from
@@ -64,16 +63,28 @@ wrapper.doFirst {
     // Using raw.githubusercontent.com instead of github.com because github.com servers deprecated
     // TLSv1/TLSv1.1 support some time ago, so older versions of curl (built against OpenSSL library that
     // doesn't support TLSv1.2) would fail to fetch the jar.
+    def jarUrlAt = { String commit -> "https://raw.githubusercontent.com/gradle/gradle/$commit/gradle/wrapper/gradle-wrapper.jar" }
     def commits = new JsonSlurper().parse(fetchBytes(
         "https://api.github.com/repos/gradle/gradle/commits?sha=master&path=gradle/wrapper/gradle-wrapper.jar&per_page=100"))*.sha
-    String wrapperJarCommit = commits.find {
-        sha256(fetchBytes("https://raw.githubusercontent.com/gradle/gradle/$it/gradle/wrapper/gradle-wrapper.jar")) == wrapperChecksum
+    String wrapperJarCommit
+    // The distribution URL points at distributions/ for releases and at distributions-snapshots/ for nightlies.
+    if (wrapper.distributionUrl.contains("/distributions-snapshots/")) {
+        // A nightly's wrapper jar is never committed to gradle/gradle, and services.gradle.org publishes only its
+        // checksum, so no URL serves it. Use the newest wrapper jar on master instead: it only downloads the
+        // distribution, which is still verified against distributionSha256Sum above.
+        wrapperJarCommit = commits.first()
+        wrapperChecksum = sha256(fetchBytes(jarUrlAt(wrapperJarCommit)))
+        logger.warn("Gradle $gradleVersion is a snapshot, whose wrapper jar isn't downloadable; " +
+            "using the newest gradle/gradle master wrapper jar instead")
+    } else {
+        wrapperChecksum = fetchText(wrapper.distributionUrl.replaceFirst(/-(bin|all)\.zip$/, '-wrapper.jar.sha256'))
+        wrapperJarCommit = commits.find { sha256(fetchBytes(jarUrlAt(it))) == wrapperChecksum }
+        if (wrapperJarCommit == null) {
+            throw new GradleException("None of the last ${commits.size()} gradle/gradle master commits touching the wrapper jar " +
+                "has one matching the published checksum $wrapperChecksum of Gradle $gradleVersion")
+        }
     }
-    if (wrapperJarCommit == null) {
-        throw new GradleException("None of the last ${commits.size()} gradle/gradle master commits touching the wrapper jar " +
-            "has one matching the published checksum $wrapperChecksum of Gradle $gradleVersion")
-    }
-    wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/$wrapperJarCommit/gradle/wrapper/gradle-wrapper.jar"
+    wrapperJarUrl = jarUrlAt(wrapperJarCommit)
     logger.lifecycle("Gradle $gradleVersion wrapper jar: $wrapperChecksum from gradle/gradle@$wrapperJarCommit")
 }
 
