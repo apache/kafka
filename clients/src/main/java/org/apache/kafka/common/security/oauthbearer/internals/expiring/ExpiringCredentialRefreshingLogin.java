@@ -91,7 +91,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                 }
                 log.info("[Principal={}]: Expiring credential re-login sleeping until: {}", principalLogText(),
                         new Date(nextRefreshMs));
-                time.sleep(nextRefreshMs - nowMs);
+                sleepUntilWallClock(nextRefreshMs);
                 if (Thread.currentThread().isInterrupted()) {
                     log.info("[Principal={}]: Expiring credential re-login thread has been interrupted and will exit.",
                             principalLogText());
@@ -132,6 +132,12 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
 
     private static final Logger log = LoggerFactory.getLogger(ExpiringCredentialRefreshingLogin.class);
     private static final long DELAY_SECONDS_BEFORE_NEXT_RETRY_WHEN_RELOGIN_FAILS = 10L;
+    // Upper bound on a single sleep while waiting to re-login. Waiting in bounded chunks and re-reading the
+    // wall clock after each one keeps the re-login from being delayed by the full interval when the host is
+    // suspended (OS sleep / VM pause) mid-wait: the monotonic timer backing Thread.sleep does not advance
+    // while the host is suspended, so a single long sleep would not notice that the credential has already
+    // expired. Package-private for tests.
+    static final long MAX_SLEEP_CHUNK_MS = 60 * 1000L;
     private static final Random RNG = new Random();
     private final Time time;
     private Thread refresherThread;
@@ -433,6 +439,25 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
     private String principalLogText() {
         return expiringCredential == null ? principalName
                 : expiringCredential.getClass().getSimpleName() + ":" + principalName;
+    }
+
+    /**
+     * Sleep until the given wall-clock time, waking at least every {@link #MAX_SLEEP_CHUNK_MS} milliseconds to
+     * re-check the clock. A single {@code time.sleep(nextRefreshMs - nowMs)} would not account for time the host
+     * spends suspended (OS sleep or VM pause): the monotonic timer backing {@code Thread.sleep} does not advance
+     * while the host is suspended, so on resume the sleep would still run out its original (relative) duration and
+     * the re-login could fire long after the credential expired. Re-reading the wall clock in bounded chunks caps
+     * how late the re-login can be after a resume to one chunk. Returns early (without finishing the wait) if the
+     * thread is interrupted; the caller checks the interrupt flag.
+     */
+    void sleepUntilWallClock(long deadlineMs) {
+        long remainingMs = deadlineMs - currentMs();
+        while (remainingMs > 0) {
+            time.sleep(Math.min(remainingMs, MAX_SLEEP_CHUNK_MS));
+            if (Thread.currentThread().isInterrupted())
+                return;
+            remainingMs = deadlineMs - currentMs();
+        }
     }
 
     private long currentMs() {

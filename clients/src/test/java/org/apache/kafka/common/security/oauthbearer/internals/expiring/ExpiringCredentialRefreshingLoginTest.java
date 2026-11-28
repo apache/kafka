@@ -37,6 +37,7 @@ import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.security.auth.Subject;
 import javax.security.auth.login.AppConfigurationEntry;
@@ -793,6 +794,56 @@ public class ExpiringCredentialRefreshingLoginTest {
             retvalWaiters.add(waiter);
         }
         return retvalWaiters;
+    }
+
+    /**
+     * A MockTime whose clock can additionally jump forward on a chosen sleep call, to simulate the host being
+     * suspended (OS sleep / VM pause) while the refresher thread is asleep: Thread.sleep returns having consumed its
+     * relative duration, but the wall clock has advanced by much more.
+     */
+    private static final class SuspendableMockTime extends MockTime {
+        private final AtomicInteger sleeps = new AtomicInteger();
+        private int jumpOnSleepNumber = -1;
+        private long jumpMs = 0L;
+
+        @Override
+        public void sleep(long ms) {
+            int n = sleeps.incrementAndGet();
+            super.sleep(ms + (n == jumpOnSleepNumber ? jumpMs : 0L));
+        }
+    }
+
+    private static TestExpiringCredentialRefreshingLogin minimalLoginForSleepTest(Time time) {
+        return new TestExpiringCredentialRefreshingLogin(
+                refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(0.8, (short) 0, (short) 0, true),
+                new TestLoginContextFactory(), time, 1000L * 60 * 100, Long.MAX_VALUE, true);
+    }
+
+    @Test
+    public void sleepUntilWallClockWaitsInBoundedChunksAndStopsAtTheDeadline() {
+        SuspendableMockTime time = new SuspendableMockTime();
+        long chunk = ExpiringCredentialRefreshingLogin.MAX_SLEEP_CHUNK_MS;
+        long deadline = time.milliseconds() + 2 * chunk + chunk / 2;
+        minimalLoginForSleepTest(time).sleepUntilWallClock(deadline);
+        // Waits in bounded chunks (chunk, chunk, half-chunk) and lands exactly on the deadline.
+        assertEquals(deadline, time.milliseconds());
+        assertEquals(3, time.sleeps.get());
+    }
+
+    @Test
+    public void sleepUntilWallClockReturnsPromptlyAfterHostSuspend() {
+        SuspendableMockTime time = new SuspendableMockTime();
+        long chunk = ExpiringCredentialRefreshingLogin.MAX_SLEEP_CHUNK_MS;
+        long start = time.milliseconds();
+        long deadline = start + 60 * chunk; // far away: a single sleep would not return until long after this
+        // Simulate the host being suspended past the deadline during the first chunk.
+        time.jumpOnSleepNumber = 1;
+        time.jumpMs = deadline + chunk;
+        minimalLoginForSleepTest(time).sleepUntilWallClock(deadline);
+        // After one chunk the wall clock has already passed the deadline, so the wait returns immediately
+        // instead of sleeping out the full (relative) interval.
+        assertEquals(1, time.sleeps.get());
+        assertTrue(time.milliseconds() >= deadline);
     }
 
     private static ExpiringCredentialRefreshConfig refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
