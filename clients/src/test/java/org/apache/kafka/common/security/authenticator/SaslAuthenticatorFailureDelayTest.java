@@ -99,7 +99,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
-                "Authentication failed: Invalid username or password");
+                "Authentication failed for user " + TestJaasConfig.USERNAME + ": Invalid username or password");
         server.verifyAuthenticationMetrics(0, 1);
     }
 
