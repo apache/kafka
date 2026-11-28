@@ -1052,7 +1052,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         requestVersion)
                 );
 
-                if (!partitionData.acquiredRecords().isEmpty()) {
+                if (!partitionData.acquiredRecords().isEmpty() || ShareFetchCollector.isErrorReturnedToApplication(partitionError)) {
                     fetchMoreRecords = false;
                 }
             }

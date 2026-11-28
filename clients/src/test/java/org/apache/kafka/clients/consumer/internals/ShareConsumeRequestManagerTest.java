@@ -2038,6 +2038,38 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(Set.of(topicName), e.unauthorizedTopics());
     }
 
+    @Test
+    public void testNoFetchAfterErrorReturnedToApplicationUntilNextPoll() {
+        buildRequestManager();
+        assignFromSubscribed(Set.of(tp0));
+
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fullShareFetchResponse(tip0, records, emptyAcquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The error acquires no record, but the application receives it on the next poll, so nothing is fetched
+        // until then, however many times the request manager is polled.
+        assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
+        assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
+
+        assertThrows(TopicAuthorizationException.class, this::collectFetch);
+        assertEquals(1, sendFetches());
+    }
+
+    @Test
+    public void testFetchAgainAfterErrorNotReturnedToApplication() {
+        buildRequestManager();
+        assignFromSubscribed(Set.of(tp0));
+
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fullShareFetchResponse(tip0, records, emptyAcquiredRecords, Errors.UNKNOWN_SERVER_ERROR));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The application does not receive the error, so the partition is fetched again without waiting for the
+        // next poll.
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+    }
+
     @ParameterizedTest
     @MethodSource("handleShareFetchResponseErrorSupplier")
     public void testHandleShareFetchResponseError(Errors error,
