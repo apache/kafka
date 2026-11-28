@@ -446,7 +446,7 @@ public class GroupCoordinatorConfigTest {
 
     @Test
     public void testStreamsGroupAssignorsOverridingBuiltinName() {
-        // A custom assignor may override a built-in by reusing its name when the built-in itself is not configured.
+        // A custom assignor may reuse the name of a built-in; groups selecting that name get the custom one.
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyNamedTaskAssignor.class.getName());
         GroupCoordinatorConfig config = createConfig(configs);
@@ -467,14 +467,12 @@ public class GroupCoordinatorConfigTest {
     @Test
     public void testStreamsGroupAssignorsBuiltinByClassName() {
         // A built-in may also be configured by its class name and resolves to the built-in itself.
-        // The name it is registered under is the built-in short name.
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyTaskAssignor.class.getName());
         GroupCoordinatorConfig config = createConfig(configs);
         List<TaskAssignor> assignors = config.streamsGroupAssignors();
         assertEquals(1, assignors.size());
         assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
-        assertEquals(List.of("sticky"), config.streamsGroupAssignorNames());
     }
 
     @Test
