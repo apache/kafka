@@ -36,6 +36,8 @@ Kafka includes six core apis:
   6. The Admin API allows managing and inspecting topics, brokers, and other Kafka objects. 
 Kafka exposes all its functionality over a language-independent protocol which has clients available in many programming languages. However only the Java clients are maintained as part of the main Kafka project, the others are available as independent open source projects. A list of non-Java clients is available [here](https://cwiki.apache.org/confluence/x/3gDVAQ). 
 
+To find uses of Kafka classes that are not part of the public API in your application or connector, see the [Internal API Checker](/{version}/apis/internal-api-checker/).
+
 # Producer API
 
 The Producer API allows applications to send streams of data to topics in the Kafka cluster. 
